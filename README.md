@@ -1,0 +1,5 @@
+1. the user provides a file
+2. we extract a BOM from the file (alternatively, we can begin at this step)
+3. there will be additional information that needs to be finalized for each row in the BOM. this can be provided by LLM through user conversation and through a high level user preference and/or project preference. the llm should identify all possible __joint__ bom possibilities. (joint consideration necesary bec we need to consider the order batches, and its not tribvial to pretend that each part can be obtains from a separate provider without considering the other part sourcing decisions). this might be like an anealing problem but really an evolutionary optimization would allow for the branch spliting while retaining join BOM-partlist consideration 
+
+so this should be a simple app. for now, lets just make it a stateless req-res single page app. 

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { parseBomCsv } from "@/lib/bom-parser";
-import { suggestBoms } from "@/lib/bom-realizer";
+import { suggestBomsWithAgent } from "@/lib/bom-agent";
 
 export async function POST(request: NextRequest) {
   try {
@@ -27,8 +27,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Generate BOM suggestions
-    const result = await suggestBoms(bomItems);
+    // Use the BOM agent for intelligent suggestion
+    const result = await suggestBomsWithAgent(bomItems);
 
     return NextResponse.json(result);
   } catch (error) {

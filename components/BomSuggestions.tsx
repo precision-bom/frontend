@@ -11,6 +11,7 @@ export default function BomSuggestions({ result }: BomSuggestionsProps) {
   const [expandedBom, setExpandedBom] = useState<string | null>(
     result.suggestions[0]?.id || null
   );
+  const [showReasoning, setShowReasoning] = useState(false);
 
   const toggleExpand = (bomId: string) => {
     setExpandedBom(expandedBom === bomId ? null : bomId);
@@ -18,6 +19,46 @@ export default function BomSuggestions({ result }: BomSuggestionsProps) {
 
   return (
     <div className="space-y-6">
+      {/* Agent Reasoning */}
+      {result.reasoning && result.reasoning.length > 0 && (
+        <div className="bg-purple-50 rounded-lg shadow border border-purple-200">
+          <button
+            onClick={() => setShowReasoning(!showReasoning)}
+            className="w-full p-4 flex items-center justify-between text-left"
+          >
+            <div className="flex items-center gap-2">
+              <span className="text-purple-600 text-lg">🤖</span>
+              <span className="font-semibold text-purple-900">
+                Agent Reasoning
+              </span>
+              <span className="text-purple-600 text-sm">
+                ({result.reasoning.length} steps)
+              </span>
+            </div>
+            <span className="text-purple-600">
+              {showReasoning ? "▼" : "▶"}
+            </span>
+          </button>
+
+          {showReasoning && (
+            <div className="px-4 pb-4">
+              <div className="bg-white rounded-lg p-4 max-h-64 overflow-y-auto">
+                <ol className="space-y-2 text-sm">
+                  {result.reasoning.map((step, index) => (
+                    <li key={index} className="flex gap-3">
+                      <span className="text-purple-400 font-mono text-xs mt-0.5">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <span className="text-gray-700">{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Summary */}
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">
@@ -63,7 +104,7 @@ export default function BomSuggestions({ result }: BomSuggestionsProps) {
       {/* Suggested BOMs */}
       <div className="space-y-4">
         <h2 className="text-lg font-semibold text-gray-900">
-          Suggested Configurations ({result.suggestions.length})
+          Optimized Configurations ({result.suggestions.length})
         </h2>
 
         {result.suggestions.length === 0 ? (
@@ -113,12 +154,12 @@ function BomCard({ bom, isExpanded, onToggle }: BomCardProps) {
             >
               {bom.score}
             </div>
-            <div>
+            <div className="flex-1">
               <h3 className="font-semibold text-gray-900">{bom.name}</h3>
-              <p className="text-sm text-gray-500">{bom.description}</p>
+              <p className="text-sm text-gray-500 line-clamp-2">{bom.description}</p>
             </div>
           </div>
-          <div className="text-right">
+          <div className="text-right ml-4">
             <div className="text-xl font-bold text-gray-900">
               ${bom.totalCost.toFixed(2)}
             </div>
@@ -153,48 +194,50 @@ function BomCard({ bom, isExpanded, onToggle }: BomCardProps) {
       {/* Expanded details */}
       {isExpanded && (
         <div className="border-t border-gray-200">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                  Part
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                  MPN
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                  Qty
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                  Distributor
-                </th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
-                  Stock
-                </th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                  Unit
-                </th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
-                  Total
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {bom.lineItems.map((item) => (
-                <LineItemRow key={item.bomItemId} item={item} />
-              ))}
-            </tbody>
-            <tfoot className="bg-gray-50">
-              <tr>
-                <td colSpan={6} className="px-4 py-3 text-right font-semibold">
-                  Total:
-                </td>
-                <td className="px-4 py-3 text-right font-bold text-lg">
-                  ${bom.totalCost.toFixed(2)}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Part
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    MPN
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Qty
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Distributor
+                  </th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">
+                    Stock
+                  </th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                    Unit
+                  </th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-gray-500 uppercase">
+                    Total
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {bom.lineItems.map((item) => (
+                  <LineItemRow key={item.bomItemId} item={item} />
+                ))}
+              </tbody>
+              <tfoot className="bg-gray-50">
+                <tr>
+                  <td colSpan={6} className="px-4 py-3 text-right font-semibold">
+                    Total:
+                  </td>
+                  <td className="px-4 py-3 text-right font-bold text-lg">
+                    ${bom.totalCost.toFixed(2)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
         </div>
       )}
     </div>

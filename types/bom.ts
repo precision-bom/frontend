@@ -60,6 +60,7 @@ export interface BomSuggestionResult {
   originalItems: BomItem[];
   suggestions: RealizedBom[];
   unmatchedItems: BomItem[]; // items with no offers found
+  reasoning?: string[]; // agent reasoning steps
 }
 
 /**

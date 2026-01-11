@@ -45,7 +45,7 @@ export default function PrivacyPage() {
               <li key={section.id}>
                 <a
                   href={`#${section.id}`}
-                  className="text-gray-400 hover:text-white hover:bg-white hover:text-black transition-colors flex items-center gap-4 text-sm px-2 py-1"
+                  className="text-gray-400 hover:text-green-500 hover:bg-green-500/10 transition-all duration-200 flex items-center gap-4 text-sm px-2 py-1"
                 >
                   <span className="text-green-500">
                     [{String(index + 1).padStart(2, "0")}]
@@ -71,7 +71,7 @@ export default function PrivacyPage() {
         <section id="information-collected" className="mb-12 scroll-mt-20">
           <SectionHeader number="01" title="INFORMATION WE COLLECT" />
           <div className="space-y-6 text-gray-400 leading-relaxed">
-            <div className="border-4 border-gray-800 p-6 hover:border-white transition-colors">
+            <div className="border-4 border-gray-800 p-6 hover:border-green-500 transition-all duration-200 hover:shadow-lg hover:shadow-green-500/10">
               <h3 className="text-white font-bold uppercase mb-2">Account Information</h3>
               <p>
                 When you create an account, we collect your email address, name, and any other
@@ -79,7 +79,7 @@ export default function PrivacyPage() {
                 provide personalized services.
               </p>
             </div>
-            <div className="border-4 border-gray-800 p-6 hover:border-white transition-colors">
+            <div className="border-4 border-gray-800 p-6 hover:border-green-500 transition-all duration-200 hover:shadow-lg hover:shadow-green-500/10">
               <h3 className="text-white font-bold uppercase mb-2">BOM Data</h3>
               <p>
                 When you upload Bill of Materials files, we process the component data including
@@ -87,7 +87,7 @@ export default function PrivacyPage() {
                 provide sourcing suggestions and is stored securely in your account.
               </p>
             </div>
-            <div className="border-4 border-gray-800 p-6 hover:border-white transition-colors">
+            <div className="border-4 border-gray-800 p-6 hover:border-green-500 transition-all duration-200 hover:shadow-lg hover:shadow-green-500/10">
               <h3 className="text-white font-bold uppercase mb-2">Usage Analytics</h3>
               <p>
                 We collect anonymized usage data to understand how our platform is used and to
@@ -102,7 +102,7 @@ export default function PrivacyPage() {
         <section id="how-we-use" className="mb-12 scroll-mt-20">
           <SectionHeader number="02" title="HOW WE USE YOUR INFORMATION" />
           <div className="space-y-6 text-gray-400 leading-relaxed">
-            <div className="border-4 border-gray-800 p-6 hover:border-white transition-colors">
+            <div className="border-4 border-gray-800 p-6 hover:border-green-500 transition-all duration-200 hover:shadow-lg hover:shadow-green-500/10">
               <h3 className="text-white font-bold uppercase mb-2">Providing Our Service</h3>
               <p>
                 We use your BOM data to analyze components, search for availability across
@@ -110,7 +110,7 @@ export default function PrivacyPage() {
                 us to deliver accurate pricing, availability, and alternative part suggestions.
               </p>
             </div>
-            <div className="border-4 border-gray-800 p-6 hover:border-white transition-colors">
+            <div className="border-4 border-gray-800 p-6 hover:border-green-500 transition-all duration-200 hover:shadow-lg hover:shadow-green-500/10">
               <h3 className="text-white font-bold uppercase mb-2">Improving Our AI</h3>
               <p>
                 Aggregated and anonymized data may be used to improve our AI models and
@@ -118,7 +118,7 @@ export default function PrivacyPage() {
                 without explicit consent.
               </p>
             </div>
-            <div className="border-4 border-green-500 bg-black p-6">
+            <div className="border-4 border-green-500 bg-black p-6 hover:border-green-400 transition-all duration-200 hover:shadow-lg hover:shadow-green-500/20">
               <pre className="font-mono text-green-500 text-xs mb-2">/* IMPORTANT */</pre>
               <h3 className="text-green-400 font-bold uppercase mb-2">WE DO NOT SELL YOUR DATA</h3>
               <p className="text-gray-400">
@@ -138,7 +138,7 @@ export default function PrivacyPage() {
               transit (TLS 1.3) and at rest (AES-256). We implement multiple layers of security
               including:
             </p>
-            <div className="border-4 border-white p-6 font-mono text-sm">
+            <div className="border-4 border-white p-6 font-mono text-sm hover:border-green-500 transition-all duration-200">
               <pre className="text-green-500 mb-4">SECURITY_MEASURES = [</pre>
               {[
                 "Encrypted database storage with regular security audits",
@@ -147,7 +147,7 @@ export default function PrivacyPage() {
                 "Monitoring and logging for suspicious activities",
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-3 ml-4 mb-2">
-                  <span className="text-green-500">●</span>
+                  <span className="text-green-500 animate-pulse">●</span>
                   <span className="text-white">&quot;{item}&quot;,</span>
                 </div>
               ))}
@@ -168,7 +168,7 @@ export default function PrivacyPage() {
               To provide our services, we integrate with the following third-party providers:
             </p>
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="border-4 border-gray-800 p-6 hover:border-white transition-colors">
+              <div className="border-4 border-gray-800 p-6 hover:border-green-500 transition-all duration-200 hover:shadow-lg hover:shadow-green-500/10">
                 <pre className="font-mono text-green-500 text-xs mb-2">// AI_PROVIDER</pre>
                 <h3 className="text-white font-bold uppercase mb-2">Anthropic Claude</h3>
                 <p className="text-sm">
@@ -177,7 +177,7 @@ export default function PrivacyPage() {
                   models per our enterprise agreement.
                 </p>
               </div>
-              <div className="border-4 border-gray-800 p-6 hover:border-white transition-colors">
+              <div className="border-4 border-gray-800 p-6 hover:border-green-500 transition-all duration-200 hover:shadow-lg hover:shadow-green-500/10">
                 <pre className="font-mono text-green-500 text-xs mb-2">// DISTRIBUTOR_API</pre>
                 <h3 className="text-white font-bold uppercase mb-2">DigiKey API</h3>
                 <p className="text-sm">
@@ -200,7 +200,7 @@ export default function PrivacyPage() {
             <p>
               You have the following rights regarding your personal data:
             </p>
-            <div className="border-4 border-white p-6 font-mono">
+            <div className="border-4 border-white p-6 font-mono hover:border-green-500 transition-all duration-200">
               {[
                 { label: "ACCESS", desc: "Request a copy of all personal data we hold about you" },
                 { label: "DELETE", desc: "Request deletion of your account and all associated data" },
@@ -208,9 +208,9 @@ export default function PrivacyPage() {
                 { label: "CORRECT", desc: "Update or correct any inaccurate personal information" },
                 { label: "OBJECT", desc: "Opt out of certain data processing activities" },
               ].map((item, i) => (
-                <div key={i} className="flex items-start gap-4 mb-3 last:mb-0">
-                  <span className="text-green-500 font-bold w-20 shrink-0">[{item.label}]</span>
-                  <span className="text-gray-300">{item.desc}</span>
+                <div key={i} className="flex items-start gap-4 mb-3 last:mb-0 group">
+                  <span className="text-green-500 font-bold w-20 shrink-0 group-hover:text-green-400 transition-colors">[{item.label}]</span>
+                  <span className="text-gray-300 group-hover:text-white transition-colors">{item.desc}</span>
                 </div>
               ))}
             </div>
@@ -235,7 +235,7 @@ export default function PrivacyPage() {
                 { name: "SECURITY", desc: "To protect against cross-site request forgery" },
                 { name: "PREFS", desc: "To remember your display and interface preferences" },
               ].map((item, i) => (
-                <div key={i} className="border-4 border-gray-800 p-4 flex items-start gap-4 hover:border-white transition-colors">
+                <div key={i} className="border-4 border-gray-800 p-4 flex items-start gap-4 hover:border-green-500 transition-all duration-200 hover:shadow-lg hover:shadow-green-500/10">
                   <span className="font-mono text-green-500 font-bold w-24 shrink-0">{item.name}</span>
                   <span>{item.desc}</span>
                 </div>
@@ -259,12 +259,12 @@ export default function PrivacyPage() {
               If you have questions about this Privacy Policy, your personal data, or would like
               to exercise your rights, please contact us:
             </p>
-            <div className="border-4 border-white p-6">
+            <div className="border-4 border-white p-6 hover:border-green-500 transition-all duration-200">
               <pre className="font-mono text-green-500 text-xs mb-4">/* CONTACT_INFO */</pre>
               <p className="text-white font-bold uppercase mb-4">PRECISIONBOM PRIVACY TEAM</p>
               <a
                 href="mailto:privacy@precisionbom.io"
-                className="inline-flex items-center gap-3 px-6 py-3 border-4 border-green-500 text-green-500 font-bold uppercase tracking-wider hover:bg-green-500 hover:text-black transition-colors"
+                className="inline-flex items-center gap-3 px-6 py-3 border-4 border-green-500 text-green-500 font-bold uppercase tracking-wider hover:bg-green-500 hover:text-black transition-all duration-200 hover:shadow-lg hover:shadow-green-500/30"
               >
                 privacy@precisionbom.io
               </a>
@@ -280,11 +280,12 @@ export default function PrivacyPage() {
         <div className="pt-8 border-t-4 border-white">
           <Link
             href="/terms"
-            className="inline-flex items-center gap-2 text-green-500 hover:text-green-400 font-mono text-sm uppercase tracking-wider"
+            className="inline-flex items-center gap-2 text-green-500 hover:text-green-300 font-mono text-sm uppercase tracking-wider transition-all duration-200 group"
           >
-            <span>●───</span>
+            <span className="animate-pulse">●</span>
+            <span>───</span>
             VIEW TERMS OF SERVICE
-            <span>→</span>
+            <span className="group-hover:translate-x-1 transition-transform duration-200">→</span>
           </Link>
         </div>
       </div>
@@ -295,10 +296,10 @@ export default function PrivacyPage() {
 function SectionHeader({ number, title }: { number: string; title: string }) {
   return (
     <div className="flex items-center gap-4 mb-8">
-      <span className="font-mono text-green-500">●───</span>
+      <span className="font-mono text-green-500"><span className="animate-pulse">●</span>───</span>
       <span className="font-mono text-green-500">[{number}]</span>
       <h2 className="text-sm font-bold uppercase tracking-widest">{title}</h2>
-      <span className="font-mono text-green-500 flex-1 hidden md:block">────────────────────────●</span>
+      <span className="font-mono text-green-500 flex-1 hidden md:block">────────────────────────<span className="animate-pulse">●</span></span>
     </div>
   );
 }

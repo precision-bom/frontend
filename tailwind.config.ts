@@ -105,10 +105,18 @@ const config: Config = {
         glow: "0 0 30px rgba(255, 255, 255, 0.05)",
       },
       animation: {
-        "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "pulse-slow": "pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        "pulse-delayed": "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite 1s",
         "trace-flow": "traceFlow 2s ease-in-out infinite",
-        "trace-pulse": "tracePulse 4s linear infinite",
+        "trace-pulse": "tracePulse 3s ease-in-out infinite",
+        "trace-pulse-delayed": "tracePulse 3s ease-in-out infinite 1.5s",
         "fade-in-up": "fadeInUp 0.5s ease-out forwards",
+        "glow": "glow 2s ease-in-out infinite",
+        "scan": "scan 8s linear infinite",
+        "scan-delayed": "scan 8s linear infinite 4s",
+        "float": "float 6s ease-in-out infinite",
+        "blink": "blink 1s step-end infinite",
+        "typing": "typing 2s steps(20) forwards",
       },
       keyframes: {
         traceFlow: {
@@ -116,12 +124,33 @@ const config: Config = {
           "50%": { opacity: "1" },
         },
         tracePulse: {
-          "0%": { transform: "translateX(-100%)" },
-          "100%": { transform: "translateX(400%)" },
+          "0%, 100%": { opacity: "0.3" },
+          "50%": { opacity: "1" },
         },
         fadeInUp: {
           "0%": { opacity: "0", transform: "translateY(10px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+        glow: {
+          "0%, 100%": { boxShadow: "0 0 5px rgba(34, 197, 94, 0.5)" },
+          "50%": { boxShadow: "0 0 20px rgba(34, 197, 94, 0.8)" },
+        },
+        scan: {
+          "0%": { opacity: "0", transform: "translateX(-100%)" },
+          "50%": { opacity: "1" },
+          "100%": { opacity: "0", transform: "translateX(100%)" },
+        },
+        float: {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-10px)" },
+        },
+        blink: {
+          "0%, 100%": { opacity: "1" },
+          "50%": { opacity: "0" },
+        },
+        typing: {
+          "0%": { width: "0" },
+          "100%": { width: "100%" },
         },
       },
     },

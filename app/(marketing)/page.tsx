@@ -1,24 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
-
-// ASCII Box component - renders text inside ASCII art frame
-function ASCIIBox({
-  children,
-  className = "",
-  variant = "single",
-}: {
-  children: React.ReactNode;
-  className?: string;
-  variant?: "single" | "double" | "heavy";
-}) {
-  return (
-    <div className={`relative ${className}`}>
-      <div className="font-mono text-white">{children}</div>
-    </div>
-  );
-}
+import { GeometricBackground } from "@/components/ui/geometric-background";
 
 // Parallax section wrapper
 function ParallaxSection({
@@ -95,7 +80,7 @@ function RevealOnScroll({
   );
 }
 
-// ASCII Feature Card
+// ASCII Feature Card with hover animation
 function ASCIIFeatureCard({
   title,
   description,
@@ -107,14 +92,23 @@ function ASCIIFeatureCard({
 }) {
   return (
     <RevealOnScroll delay={delay}>
-      <div className="border-4 border-white bg-black p-0 hover:bg-white hover:text-black transition-colors duration-200 group">
-        <pre className="font-mono text-xs text-white group-hover:text-black whitespace-pre p-4 leading-tight">
-{`┌${"─".repeat(title.length + 2)}┐
-│ ${title} │──────●
-└${"─".repeat(title.length + 2)}┘`}
+      <div className="border-4 border-white bg-black p-0 hover:border-green-500 transition-all duration-300 group relative overflow-hidden">
+        {/* Subtle glow on hover */}
+        <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity bg-green-500/5" />
+
+        {/* Animated corner accent */}
+        <div className="absolute top-0 right-0 w-0 h-0 border-t-[20px] border-t-green-500 border-l-[20px] border-l-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+
+        <pre className="font-mono text-xs whitespace-pre p-4 leading-tight relative z-10">
+          <span className="text-white">{`┌${"─".repeat(title.length + 2)}┐`}</span>
+          {"\n"}
+          <span className="text-white">{`│ ${title} │`}</span>
+          <span className="text-green-500 group-hover:animate-pulse">──────●</span>
+          {"\n"}
+          <span className="text-white">{`└${"─".repeat(title.length + 2)}┘`}</span>
         </pre>
-        <div className="px-4 pb-4">
-          <p className="font-sans text-sm text-neutral-400 group-hover:text-neutral-600 leading-relaxed">
+        <div className="px-4 pb-4 relative z-10">
+          <p className="font-sans text-sm text-neutral-400 group-hover:text-neutral-300 transition-colors leading-relaxed">
             {description}
           </p>
         </div>
@@ -140,11 +134,17 @@ function ASCIIStat({ value, label, delay = 0 }: { value: string; label: string; 
   );
 }
 
-// ASCII separator line
+// ASCII separator line with animation
 function ASCIISeparator({ className = "" }: { className?: string }) {
   return (
-    <pre className={`font-mono text-neutral-600 text-center text-sm ${className}`}>
-      ●────────────────●────────────────●────────────────●
+    <pre className={`font-mono text-center text-sm ${className}`}>
+      <span className="text-green-500 animate-pulse">●</span>
+      <span className="text-neutral-600">────────────────</span>
+      <span className="text-green-400">●</span>
+      <span className="text-neutral-600">────────────────</span>
+      <span className="text-green-500 animate-pulse">●</span>
+      <span className="text-neutral-600">────────────────</span>
+      <span className="text-green-400">●</span>
     </pre>
   );
 }
@@ -152,52 +152,36 @@ function ASCIISeparator({ className = "" }: { className?: string }) {
 export default function LandingPage() {
   return (
     <div className="relative bg-black text-white overflow-hidden min-h-screen">
-      {/* ASCII Background Pattern */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-5">
-        <pre className="font-mono text-white text-xs leading-none whitespace-pre">
-{`║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║
-════════════════════════════════════════════════════════════════════════════════
-║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║
-════════════════════════════════════════════════════════════════════════════════
-║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║
-════════════════════════════════════════════════════════════════════════════════
-║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║║
-════════════════════════════════════════════════════════════════════════════════`}
-        </pre>
-      </div>
+      {/* Geometric Background with Parallax */}
+      <GeometricBackground variant="hero" intensity="medium" />
 
       {/* Hero Section */}
       <section className="relative pt-20 pb-32 border-b-4 border-white">
+        {/* Gradient overlay for depth */}
+        <div className="absolute inset-0 bg-gradient-to-b from-black via-transparent to-black pointer-events-none" />
         <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="text-center">
             {/* Status indicator */}
             <ParallaxSection speed={0.3}>
-              <pre className="font-mono text-xs text-neutral-500 mb-8 inline-block">
-{`[■■■■■■■■■■] SYSTEM ONLINE`}
+              <pre className="font-mono text-xs mb-8 inline-block">
+                <span className="text-green-500">[■■■■■■■■■■]</span>
+                <span className="text-white"> SYSTEM </span>
+                <span className="text-green-400">ONLINE</span>
               </pre>
             </ParallaxSection>
 
-            {/* Main ASCII Art Logo */}
+            {/* Main Logo */}
             <ParallaxSection speed={0.2}>
-              <pre className="font-mono text-white text-sm md:text-base leading-tight inline-block text-left mb-8">
-{`╔══════════════════════════════════════════════════════════╗
-║                                                          ║
-║     ██████╗ ██████╗ ███████╗ ██████╗██╗███████╗██╗ ██████╗ ███╗   ██╗    ║
-║     ██╔══██╗██╔══██╗██╔════╝██╔════╝██║██╔════╝██║██╔═══██╗████╗  ██║    ║
-║     ██████╔╝██████╔╝█████╗  ██║     ██║███████╗██║██║   ██║██╔██╗ ██║    ║
-║     ██╔═══╝ ██╔══██╗██╔══╝  ██║     ██║╚════██║██║██║   ██║██║╚██╗██║    ║
-║     ██║     ██║  ██║███████╗╚██████╗██║███████║██║╚██████╔╝██║ ╚████║    ║
-║     ╚═╝     ╚═╝  ╚═╝╚══════╝ ╚═════╝╚═╝╚══════╝╚═╝ ╚═════╝ ╚═╝  ╚═══╝    ║
-║                                                          ║
-║                    ██████╗  ██████╗ ███╗   ███╗                          ║
-║                    ██╔══██╗██╔═══██╗████╗ ████║                          ║
-║                    ██████╔╝██║   ██║██╔████╔██║                          ║
-║                    ██╔══██╗██║   ██║██║╚██╔╝██║                          ║
-║                    ██████╔╝╚██████╔╝██║ ╚═╝ ██║                          ║
-║                    ╚═════╝  ╚═════╝ ╚═╝     ╚═╝                          ║
-║                                                          ║
-╚══════════════════════════════════════════════════════════╝`}
-              </pre>
+              <div className="mb-8 flex justify-center">
+                <Image
+                  src="/precision-bom-logo.svg"
+                  alt="PrecisionBOM"
+                  width={600}
+                  height={120}
+                  className="w-full max-w-3xl h-auto invert"
+                  priority
+                />
+              </div>
             </ParallaxSection>
 
             <ParallaxSection speed={0.15}>
@@ -230,26 +214,35 @@ export default function LandingPage() {
 
             {/* Terminal Demo */}
             <ParallaxSection speed={0.1}>
-              <div className="max-w-2xl mx-auto border-4 border-white bg-black">
+              <div className="max-w-2xl mx-auto border-4 border-white bg-black relative overflow-hidden hover:border-green-500 transition-colors duration-300">
+                {/* Glow effect */}
+                <div className="absolute -top-20 -right-20 w-40 h-40 bg-green-500/20 blur-3xl pointer-events-none animate-pulse-slow" />
+                <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-green-500/10 blur-3xl pointer-events-none" />
+
                 <div className="border-b-4 border-white px-4 py-2 flex items-center gap-2">
-                  <span className="font-mono text-xs text-neutral-500">■ TERMINAL_01</span>
+                  <span className="w-3 h-3 rounded-full bg-green-500 animate-pulse" />
+                  <span className="font-mono text-xs text-neutral-500">TERMINAL_01</span>
+                  <span className="ml-auto font-mono text-xs text-green-500 animate-blink">_</span>
                 </div>
-                <pre className="font-mono text-sm text-left p-6 leading-relaxed">
-{`$ upload bom.csv
+                <pre className="font-mono text-sm text-left p-6 leading-relaxed relative z-10">
+<span className="text-green-400">$</span>{` upload bom.csv`}
+{`
 ┌─────────────────────────────────────────┐
-│ ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░░ 78%     │
-└─────────────────────────────────────────┘
+│ `}<span className="text-green-500">▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓</span><span className="text-neutral-600">░░░░░░</span>{` 78%     │
+└─────────────────────────────────────────┘`}
+<span className="text-neutral-500">{`
 # Parsing 47 components...
 # Querying DigiKey API...
-# Cross-referencing Mouser inventory...
+# Cross-referencing Mouser inventory...`}</span>
+{`
 
 ┌─────────────────────────────────────────┐
-│  STATUS: ALL PARTS IN STOCK             │
-│  TOTAL:  $2,847.32                      │
-│  SAVINGS: $423.18 (13%)                 │
+│  STATUS: `}<span className="text-green-400">ALL PARTS IN STOCK</span>{`             │
+│  TOTAL:  `}<span className="text-white">$2,847.32</span>{`                      │
+│  SAVINGS: `}<span className="text-green-300">$423.18 (13%)</span>{`                 │
 └─────────────────────────────────────────┘
 
-[✓] Ready to export`}
+`}<span className="text-green-400">[✓]</span>{` Ready to export`}
                 </pre>
               </div>
             </ParallaxSection>
@@ -258,8 +251,11 @@ export default function LandingPage() {
       </section>
 
       {/* Stats Section */}
-      <section className="py-16 border-b-4 border-white relative">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section className="py-16 border-b-4 border-white relative overflow-hidden">
+        {/* Subtle gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 via-transparent to-green-500/5 pointer-events-none" />
+
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <ASCIISeparator className="mb-12" />
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
@@ -274,17 +270,23 @@ export default function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-24 border-b-4 border-white relative">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <section id="features" className="py-24 border-b-4 border-white relative overflow-hidden">
+        <GeometricBackground variant="section" intensity="subtle" />
+
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <ParallaxSection speed={0.2}>
             <div className="text-center mb-16">
-              <pre className="font-mono text-xs text-neutral-500 mb-4 inline-block">
-{`┌────────────────────────┐
-│  FEATURES v1.0         │
-└────────────────────────┘`}
+              <pre className="font-mono text-xs mb-4 inline-block">
+                <span className="text-green-500">┌────────────────────────┐</span>
+                {"\n"}
+                <span className="text-green-500">│</span>
+                <span className="text-white">  FEATURES v1.0         </span>
+                <span className="text-green-500">│</span>
+                {"\n"}
+                <span className="text-green-500">└────────────────────────┘</span>
               </pre>
               <h2 className="font-mono text-3xl md:text-4xl font-bold text-white mb-4 tracking-tight">
-                BUILT ON DIGIKEY&apos;S CATALOG
+                BUILT ON <span className="text-green-500">DIGIKEY&apos;S</span> CATALOG
               </h2>
               <p className="font-sans text-neutral-400 text-base max-w-xl mx-auto">
                 Direct API integration means real-time pricing, live inventory counts, and accurate lead times.
@@ -329,49 +331,57 @@ export default function LandingPage() {
 
       {/* How It Works */}
       <section className="py-24 border-b-4 border-white relative">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Section geometric background */}
+        <GeometricBackground variant="section" intensity="subtle" />
+
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <ParallaxSection speed={0.2}>
             <div className="text-center mb-16">
               <h2 className="font-mono text-3xl md:text-4xl font-bold text-white mb-4 tracking-tight">
-                BOM → ORDER IN MINUTES
+                BOM <span className="text-green-500">→</span> ORDER IN MINUTES
               </h2>
             </div>
           </ParallaxSection>
 
           {/* Process flow */}
-          <div className="border-4 border-white bg-black p-8">
-            <pre className="font-mono text-white text-xs md:text-sm whitespace-pre overflow-x-auto text-center mb-8">
-{`┌─────────────┐         ┌─────────────┐         ┌─────────────┐
+          <div className="border-4 border-white bg-black p-8 relative overflow-hidden hover:border-green-500/50 transition-colors duration-500">
+            {/* Ambient glow */}
+            <div className="absolute top-0 left-1/4 w-32 h-32 bg-green-500/10 blur-3xl pointer-events-none animate-pulse-slow" />
+            <div className="absolute bottom-0 right-1/4 w-32 h-32 bg-green-500/10 blur-3xl pointer-events-none" />
+
+            <pre className="font-mono text-xs md:text-sm whitespace-pre overflow-x-auto text-center mb-8 relative z-10">
+<span className="text-white">{`┌─────────────┐         ┌─────────────┐         ┌─────────────┐
 │             │         │             │         │             │
-│  UPLOAD     │────────→│  REVIEW     │────────→│  EXPORT     │
+│  `}</span><span className="text-green-400">UPLOAD</span><span className="text-white">{`     │`}</span><span className="text-green-500 animate-pulse">────────→</span><span className="text-white">{`│  `}</span><span className="text-green-300">REVIEW</span><span className="text-white">{`     │`}</span><span className="text-green-500 animate-pulse">────────→</span><span className="text-white">{`│  `}</span><span className="text-green-400">EXPORT</span><span className="text-white">{`     │
 │  BOM        │         │  MATCHES    │         │  & ORDER    │
 │             │         │             │         │             │
 └─────────────┘         └─────────────┘         └─────────────┘
       │                       │                       │
-      ▼                       ▼                       ▼
+      ▼                       ▼                       ▼`}</span>
+{`
  Drop CSV/Excel        See live pricing        Export optimized
  We parse MPNs         Stock & alternates      Add to DigiKey cart`}
             </pre>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8">
-              <RevealOnScroll delay={0} className="text-center">
-                <div className="font-mono text-4xl font-bold text-white mb-2">01</div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mt-8 relative z-10">
+              <RevealOnScroll delay={0} className="text-center group">
+                <div className="font-mono text-4xl font-bold text-green-500 mb-2 group-hover:animate-pulse">01</div>
                 <h3 className="font-mono text-lg font-bold text-white mb-2">UPLOAD BOM</h3>
                 <p className="font-sans text-sm text-neutral-400">
                   Drop your CSV or Excel file. We parse manufacturer part numbers automatically.
                 </p>
               </RevealOnScroll>
 
-              <RevealOnScroll delay={100} className="text-center">
-                <div className="font-mono text-4xl font-bold text-white mb-2">02</div>
+              <RevealOnScroll delay={100} className="text-center group">
+                <div className="font-mono text-4xl font-bold text-green-400 mb-2 group-hover:animate-pulse">02</div>
                 <h3 className="font-mono text-lg font-bold text-white mb-2">REVIEW MATCHES</h3>
                 <p className="font-sans text-sm text-neutral-400">
                   See live pricing, stock levels, and AI-suggested alternatives at a glance.
                 </p>
               </RevealOnScroll>
 
-              <RevealOnScroll delay={200} className="text-center">
-                <div className="font-mono text-4xl font-bold text-white mb-2">03</div>
+              <RevealOnScroll delay={200} className="text-center group">
+                <div className="font-mono text-4xl font-bold text-green-500 mb-2 group-hover:animate-pulse">03</div>
                 <h3 className="font-mono text-lg font-bold text-white mb-2">EXPORT & ORDER</h3>
                 <p className="font-sans text-sm text-neutral-400">
                   Export your optimized BOM or add parts directly to DigiKey.
@@ -383,39 +393,51 @@ export default function LandingPage() {
       </section>
 
       {/* Final CTA */}
-      <section className="py-24">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          <ParallaxSection speed={0.15}>
-            <div className="border-4 border-white bg-black p-12 text-center relative">
-              {/* Corner decorations */}
-              <pre className="absolute top-4 left-4 font-mono text-neutral-600 text-xs">┌──</pre>
-              <pre className="absolute top-4 right-4 font-mono text-neutral-600 text-xs">──┐</pre>
-              <pre className="absolute bottom-4 left-4 font-mono text-neutral-600 text-xs">└──</pre>
-              <pre className="absolute bottom-4 right-4 font-mono text-neutral-600 text-xs">──┘</pre>
+      <section className="py-24 relative">
+        <GeometricBackground variant="section" intensity="subtle" />
 
-              <pre className="font-mono text-white text-sm mb-6">
-{`╔═══════════════════════════════════════╗
-║                                       ║
-║   READY TO OPTIMIZE YOUR SOURCING?    ║
-║                                       ║
-╚═══════════════════════════════════════╝`}
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+          <ParallaxSection speed={0.15}>
+            <div className="border-4 border-white bg-black p-12 text-center relative overflow-hidden hover:border-green-500/50 transition-colors duration-500">
+              {/* Glow effects */}
+              <div className="absolute -top-20 left-1/2 -translate-x-1/2 w-64 h-64 bg-green-500/15 blur-3xl pointer-events-none animate-pulse-slow" />
+              <div className="absolute -bottom-20 left-1/4 w-40 h-40 bg-green-500/10 blur-3xl pointer-events-none" />
+
+              {/* Corner decorations with animation */}
+              <pre className="absolute top-4 left-4 font-mono text-green-500 text-xs animate-pulse">┌──●</pre>
+              <pre className="absolute top-4 right-4 font-mono text-green-500 text-xs animate-pulse">●──┐</pre>
+              <pre className="absolute bottom-4 left-4 font-mono text-green-400 text-xs">└──●</pre>
+              <pre className="absolute bottom-4 right-4 font-mono text-green-400 text-xs">●──┘</pre>
+
+              <pre className="font-mono text-sm mb-6 relative z-10">
+<span className="text-green-500">╔═══════════════════════════════════════╗</span>
+{`
+`}<span className="text-green-500">║</span><span className="text-white">{`                                       `}</span><span className="text-green-500">║</span>{`
+`}<span className="text-green-500">║</span><span className="text-white">{`   READY TO OPTIMIZE YOUR SOURCING?    `}</span><span className="text-green-500">║</span>{`
+`}<span className="text-green-500">║</span><span className="text-white">{`                                       `}</span><span className="text-green-500">║</span>
+{`
+`}<span className="text-green-500">╚═══════════════════════════════════════╝</span>
               </pre>
 
-              <p className="font-sans text-neutral-400 text-base max-w-md mx-auto mb-8">
+              <p className="font-sans text-neutral-400 text-base max-w-md mx-auto mb-8 relative z-10">
                 Start with our free tier. No credit card required.
                 Join hundreds of hardware teams already using PrecisionBOM.
               </p>
 
               <Link
                 href="/register"
-                className="group inline-flex items-center justify-center px-10 py-4 text-sm font-bold bg-white text-black border-4 border-white hover:bg-black hover:text-white transition-colors duration-200 font-mono uppercase tracking-wider"
+                className="group inline-flex items-center justify-center px-10 py-4 text-sm font-bold bg-green-500 text-black border-4 border-green-500 hover:bg-black hover:text-green-500 transition-all duration-200 font-mono uppercase tracking-wider relative z-10 hover:shadow-[0_0_30px_rgba(34,197,94,0.3)]"
               >
                 START SOURCING NOW
                 <span className="ml-2 group-hover:translate-x-1 transition-transform">→</span>
               </Link>
 
-              <pre className="font-mono text-neutral-600 text-xs mt-8">
-{`●────────────────●────────────────●`}
+              <pre className="font-mono text-xs mt-8 relative z-10">
+                <span className="text-green-500 animate-pulse">●</span>
+                <span className="text-neutral-600">────────────────</span>
+                <span className="text-green-400">●</span>
+                <span className="text-neutral-600">────────────────</span>
+                <span className="text-green-500 animate-pulse">●</span>
               </pre>
             </div>
           </ParallaxSection>
@@ -423,12 +445,24 @@ export default function LandingPage() {
       </section>
 
       {/* Footer ASCII art */}
-      <div className="border-t-4 border-white py-8">
-        <pre className="font-mono text-neutral-600 text-xs text-center">
-{`═══════════════════════════════════════════════════════════════
-                    PRECISIONBOM © 2024
-         PRECISION SOURCING FOR PRECISION ENGINEERING
-═══════════════════════════════════════════════════════════════`}
+      <div className="border-t-4 border-white py-8 relative overflow-hidden">
+        <div className="absolute inset-0 flex justify-between items-center px-8 pointer-events-none opacity-20">
+          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+          <div className="w-2 h-2 rounded-full bg-green-400" />
+          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+          <div className="w-2 h-2 rounded-full bg-green-400" />
+          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+        </div>
+        <pre className="font-mono text-xs text-center relative z-10">
+          <span className="text-green-500">═══════════════════════════════</span>
+          <span className="text-green-400">═══════════════════════════════</span>
+          {"\n"}
+          <span className="text-neutral-500">PRECISIONBOM © 2024</span>
+          {"\n"}
+          <span className="text-neutral-600">PRECISION SOURCING FOR PRECISION ENGINEERING</span>
+          {"\n"}
+          <span className="text-green-400">═══════════════════════════════</span>
+          <span className="text-green-500">═══════════════════════════════</span>
         </pre>
       </div>
     </div>

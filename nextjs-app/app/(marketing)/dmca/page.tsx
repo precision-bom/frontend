@@ -220,8 +220,8 @@ export default function DMCAPage() {
                 <div className="space-y-2 text-sm">
                   <p>
                     <span className="text-gray-600">Email:</span>{" "}
-                    <a href="mailto:dmca@precisionbom.io" className="text-green-500 hover:text-green-300">
-                      dmca@precisionbom.io
+                    <a href="mailto:dmca@precisionbom.com" className="text-green-500 hover:text-green-300">
+                      dmca@precisionbom.com
                     </a>
                   </p>
                   <p>

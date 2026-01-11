@@ -181,11 +181,11 @@ export default function AboutPage() {
 
             <div className="space-y-6">
               <a
-                href="mailto:feedback@precisionbom.dev"
+                href="mailto:feedback@precisionbom.com"
                 className="inline-flex items-center gap-3 px-8 py-4 border-4 border-white bg-white text-black font-bold uppercase tracking-widest hover:bg-green-500 hover:border-green-500 hover:text-black transition-all duration-300 hover:shadow-[0_0_20px_rgba(34,197,94,0.4)]"
               >
                 <span className="font-mono">[</span>
-                feedback@precisionbom.dev
+                feedback@precisionbom.com
                 <span className="font-mono">]</span>
               </a>
 

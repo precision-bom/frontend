@@ -321,10 +321,10 @@ export default function TermsPage() {
               <pre className="font-mono text-green-500 text-xs mb-4">/* CONTACT_INFO */</pre>
               <p className="text-white font-bold uppercase mb-4">PRECISIONBOM LEGAL</p>
               <a
-                href="mailto:legal@precisionbom.io"
+                href="mailto:legal@precisionbom.com"
                 className="inline-flex items-center gap-3 px-6 py-3 border-4 border-green-500 text-green-500 font-bold uppercase tracking-wider hover:bg-green-500 hover:text-black transition-all duration-200 hover:shadow-lg hover:shadow-green-500/30"
               >
-                legal@precisionbom.io
+                legal@precisionbom.com
               </a>
             </div>
           </div>

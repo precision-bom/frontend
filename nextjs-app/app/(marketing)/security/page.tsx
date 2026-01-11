@@ -239,14 +239,14 @@ export default function SecurityPage() {
               <pre className="font-mono text-green-500 text-xs mb-4">/* SECURITY_CONTACT */</pre>
               <p className="text-white font-bold uppercase mb-4">PRECISIONBOM SECURITY TEAM</p>
               <a
-                href="mailto:security@precisionbom.io"
+                href="mailto:security@precisionbom.com"
                 className="inline-flex items-center gap-3 px-6 py-3 border-4 border-green-500 text-green-500 font-bold uppercase tracking-wider hover:bg-green-500 hover:text-black transition-all duration-200 hover:shadow-lg hover:shadow-green-500/30"
               >
-                security@precisionbom.io
+                security@precisionbom.com
               </a>
             </div>
             <p className="text-sm text-gray-600">
-              For general inquiries, please use privacy@precisionbom.io or legal@precisionbom.io.
+              For general inquiries, please use privacy@precisionbom.com or legal@precisionbom.com.
             </p>
           </div>
         </section>

@@ -156,7 +156,7 @@ export default function AcceptableUsePage() {
             </div>
             <div className="border-l-4 border-green-500 pl-6">
               <p>
-                Enterprise customers may request higher limits. Contact sales@precisionbom.io
+                Enterprise customers may request higher limits. Contact sales@precisionbom.com
                 for custom API arrangements.
               </p>
             </div>
@@ -232,10 +232,10 @@ export default function AcceptableUsePage() {
               <pre className="font-mono text-green-500 text-xs mb-4">/* CONTACT_INFO */</pre>
               <p className="text-white font-bold uppercase mb-4">PRECISIONBOM COMPLIANCE</p>
               <a
-                href="mailto:abuse@precisionbom.io"
+                href="mailto:abuse@precisionbom.com"
                 className="inline-flex items-center gap-3 px-6 py-3 border-4 border-green-500 text-green-500 font-bold uppercase tracking-wider hover:bg-green-500 hover:text-black transition-all duration-200 hover:shadow-lg hover:shadow-green-500/30"
               >
-                abuse@precisionbom.io
+                abuse@precisionbom.com
               </a>
             </div>
           </div>

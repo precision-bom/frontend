@@ -450,6 +450,87 @@ export default function FeaturesPage() {
         </RevealOnScroll>
       </section>
 
+      {/* AI Agents */}
+      <section className="max-w-6xl mx-auto px-6 py-20 border-b-4 border-white">
+        <RevealOnScroll delay={100}>
+          <div className="text-center mb-12">
+            <pre className="font-mono text-xs text-neutral-500 mb-4 inline-block">
+{`┌─────────────────────────────────┐
+│  AI AGENTS // PARALLEL ANALYSIS │
+└─────────────────────────────────┘`}
+            </pre>
+            <p className="font-sans text-neutral-400">
+              Four specialized AI agents analyze your BOM in parallel, each with a unique perspective.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {/* Market Intel Agent */}
+            <div className="relative group border-4 border-green-500 bg-green-950/20 hover:border-green-400 transition-all duration-300 p-6">
+              <div className="absolute inset-0 bg-green-500/10 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10" />
+              <pre className="font-mono text-green-400 text-sm mb-2">[00] MARKET INTEL</pre>
+              <span className="font-mono text-xs text-green-500 border border-green-500/50 px-2 py-0.5 mb-4 inline-block">APIFY</span>
+              <p className="font-sans text-sm text-neutral-400 mt-3">
+                Scrapes news, manufacturer sites, and trade publications for real-world supply chain intelligence.
+              </p>
+              <ul className="mt-4 space-y-1 font-mono text-xs text-neutral-500">
+                <li>• Shortage alerts</li>
+                <li>• EOL announcements</li>
+                <li>• Price trends</li>
+              </ul>
+            </div>
+
+            {/* Engineering Agent */}
+            <div className="relative group border-4 border-white hover:border-green-500 transition-all duration-300 p-6">
+              <div className="absolute inset-0 bg-green-500/10 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10" />
+              <pre className="font-mono text-green-500 text-sm mb-2">[01] ENGINEERING</pre>
+              <p className="font-sans text-sm text-neutral-400 mt-3">
+                Validates parts against compliance requirements and flags technical risks.
+              </p>
+              <ul className="mt-4 space-y-1 font-mono text-xs text-neutral-500">
+                <li>• RoHS/REACH compliance</li>
+                <li>• Lifecycle status (EOL?)</li>
+                <li>• Counterfeit risk</li>
+              </ul>
+            </div>
+
+            {/* Sourcing Agent */}
+            <div className="relative group border-4 border-white hover:border-green-500 transition-all duration-300 p-6">
+              <div className="absolute inset-0 bg-green-500/10 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10" />
+              <pre className="font-mono text-green-500 text-sm mb-2">[02] SOURCING</pre>
+              <p className="font-sans text-sm text-neutral-400 mt-3">
+                Evaluates supply chain risk, checks stock levels, and suggests alternates.
+              </p>
+              <ul className="mt-4 space-y-1 font-mono text-xs text-neutral-500">
+                <li>• Lead time analysis</li>
+                <li>• Multi-source options</li>
+                <li>• Supplier trust scores</li>
+              </ul>
+            </div>
+
+            {/* Finance Agent */}
+            <div className="relative group border-4 border-white hover:border-green-500 transition-all duration-300 p-6">
+              <div className="absolute inset-0 bg-green-500/10 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 -z-10" />
+              <pre className="font-mono text-green-500 text-sm mb-2">[03] FINANCE</pre>
+              <p className="font-sans text-sm text-neutral-400 mt-3">
+                Optimizes for budget constraints and identifies cost-saving opportunities.
+              </p>
+              <ul className="mt-4 space-y-1 font-mono text-xs text-neutral-500">
+                <li>• Price break analysis</li>
+                <li>• MOQ optimization</li>
+                <li>• Volume discounts</li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="mt-8 text-center">
+            <p className="font-mono text-xs text-neutral-500">
+              All 4 agents run in parallel using asyncio.gather() → Final Decision Agent synthesizes results
+            </p>
+          </div>
+        </RevealOnScroll>
+      </section>
+
       {/* CTA */}
       <section className="max-w-6xl mx-auto px-6 py-24">
         <RevealOnScroll delay={100}>

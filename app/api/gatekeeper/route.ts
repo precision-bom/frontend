@@ -9,6 +9,14 @@ const ABI = [
   "function write(string[] calldata keys, string[] calldata values) external"
 ];
 
+interface EtherscanTx {
+  to: string;
+  value: string;
+  isError: string;
+  timeStamp: string;
+  hash: string;
+}
+
 const CLICKWRAP_MESSAGE = (nonce: string) => `PrecisionBOM Terminal Access & Sourcing Agreement:
 By signing this cryptographic strike, I acknowledge:
 1. Authorization to interact with the PrecisionBOM forensic substrate.
@@ -16,6 +24,43 @@ By signing this cryptographic strike, I acknowledge:
 3. Consent to the recording of all sourcing strikes within ERC-7827.
 
 Session Nonce: ${nonce}`;
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const address = searchParams.get('address')?.toLowerCase();
+
+  if (!address) {
+    return NextResponse.json({ error: 'Address required' }, { status: 400 });
+  }
+
+  try {
+    const provider = new ethers.JsonRpcProvider(process.env.SEPOLIA_RPC_URL || "https://1rpc.io/sepolia");
+    const contract = new ethers.Contract(CONTRACT_ADDRESS, ABI, provider);
+    
+    const jsonStateString = await contract.json();
+    const state = JSON.parse(jsonStateString);
+    const expirationDateStr = state[address];
+    const now = new Date();
+
+    if (expirationDateStr && new Date(expirationDateStr) > now) {
+      return NextResponse.json({ 
+        status: '200 OK', 
+        message: 'Access Granted',
+        expiration: expirationDateStr
+      });
+    }
+
+    return NextResponse.json({ 
+      error: '402 Payment Required', 
+      message: 'No active subscription found. POST signature to /api/gatekeeper for tiered check.'
+    }, { status: 402 });
+
+  } catch (error: unknown) {
+    const err = error as Error;
+    console.error('PrecisionBOM Gatekeeper GET Error:', err);
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
 
 export async function POST(request: Request) {
   try {
@@ -49,23 +94,31 @@ export async function POST(request: Request) {
     }
 
     // 3. Tier 2: Ledger Audit (Independent Chain Scan)
-    // Note: In a production environment, use an indexer like Etherscan API.
-    // For this strike, we simulate the scan logic or use a specialized provider.
     console.log(`Tier 1 Failed. Auditing ledger for ${address}...`);
     
-    // We'll check the last 1000 blocks for a transaction from user to vault
-    // This is a simplified "Simplest Form" implementation
-    const paymentFound = false;
-    const paymentDate = new Date();
-
-    // IMPLEMENTATION NOTE: In this terminal environment, we'll check if there's a recent 
-    // tx by fetching the transaction count or similar, but for full automation 
-    // we assume the scan finds a 0.001 ETH tx to VAULT_ADDRESS.
+    // We query Etherscan Sepolia for transactions involving the address
+    const etherscanUrl = `https://api-sepolia.etherscan.io/api?module=account&action=txlist&address=${address}&startblock=0&endblock=99999999&sort=desc&apikey=${process.env.ETHERSCAN_API_KEY || "YourApiKeyToken"}`;
     
-    // --- MOCK SCAN LOGIC (To be replaced by Etherscan API call) ---
-    // If we had an API key: const txs = await fetch(`https://api-sepolia.etherscan.io/...&address=${address}...`);
-    // For now, if Tier 1 fails, we return 402 but include instructions.
-    // -------------------------------------------------------------
+    const ethResponse = await fetch(etherscanUrl);
+    const ethData = await ethResponse.json();
+
+    let paymentFound = false;
+    let paymentDate = new Date();
+
+    if (ethData.status === "1" && Array.isArray(ethData.result)) {
+      // Look for a transaction to the VAULT_ADDRESS with value >= FEE
+      const validTx = (ethData.result as EtherscanTx[]).find((tx) => 
+        tx.to.toLowerCase() === VAULT_ADDRESS.toLowerCase() && 
+        parseFloat(ethers.formatEther(tx.value)) >= parseFloat(SUBSCRIPTION_FEE) &&
+        tx.isError === "0"
+      );
+
+      if (validTx) {
+        paymentFound = true;
+        paymentDate = new Date(parseInt(tx.timeStamp) * 1000);
+        console.log(`Matching transaction discovered: ${validTx.hash}`);
+      }
+    }
 
     if (!paymentFound) {
       return NextResponse.json({ 
@@ -103,7 +156,7 @@ export async function POST(request: Request) {
 
   } catch (error: unknown) {
     const err = error as Error;
-    console.error('PrecisionBOM Gatekeeper Error:', err);
+    console.error('PrecisionBOM Gatekeeper POST Error:', err);
     return NextResponse.json({ error: 'Internal Server Error', details: err.message }, { status: 500 });
   }
 }

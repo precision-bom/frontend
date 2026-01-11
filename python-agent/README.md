@@ -33,10 +33,16 @@ uv sync
 
 ### Environment Variables
 
-Create `.env` file:
+Copy `.env.example` to `.env` and configure:
 
 ```env
-ANTHROPIC_API_KEY=sk-ant-...
+# LLM API Key (at least one required)
+OPENAI_API_KEY=sk-...        # Required for gpt-4o-mini (default)
+ANTHROPIC_API_KEY=sk-ant-... # Required for Claude models
+
+# Optional
+CREWAI_MODEL=gpt-4o-mini     # Model for agents
+PORT=8000                     # API server port
 ```
 
 ### Start the Server

@@ -34,6 +34,12 @@ export default function MarketingLayout({
                 [FEATURES]
               </Link>
               <Link
+                href="/internals"
+                className="font-mono text-sm text-neutral-400 hover:text-green-500 transition-colors uppercase tracking-wider"
+              >
+                [INTERNALS]
+              </Link>
+              <Link
                 href="/about"
                 className="font-mono text-sm text-neutral-400 hover:text-green-500 transition-colors uppercase tracking-wider"
               >
@@ -100,6 +106,9 @@ export default function MarketingLayout({
               <div className="flex flex-col gap-2 font-mono text-xs text-neutral-500 uppercase tracking-wider">
                 <Link href="/features" className="hover:text-green-500 transition-colors">
                   FEATURES
+                </Link>
+                <Link href="/internals" className="hover:text-green-500 transition-colors">
+                  INTERNALS
                 </Link>
                 <Link href="/about" className="hover:text-green-500 transition-colors">
                   ABOUT

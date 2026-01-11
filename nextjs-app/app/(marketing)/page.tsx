@@ -178,7 +178,7 @@ export default function LandingPage() {
                   alt="PrecisionBOM"
                   width={600}
                   height={120}
-                  className="w-full max-w-3xl h-auto invert"
+                  className="w-full max-w-3xl h-auto"
                   priority
                 />
               </div>

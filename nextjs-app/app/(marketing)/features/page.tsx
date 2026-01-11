@@ -118,8 +118,8 @@ export default function FeaturesPage() {
           </h1>
 
           <p className="font-sans text-lg text-neutral-400 max-w-2xl leading-relaxed">
-            Stop wasting hours on distributor sites. Get sourcing suggestions in seconds.
-            Real-time data. AI-powered recommendations. Zero spreadsheet hell.
+            Upload your BOM, get supplier-qualified parts with AI-powered suggestions.
+            Real-time DigiKey data. Transparent reasoning. Export-ready results.
           </p>
         </RevealOnScroll>
       </header>
@@ -172,7 +172,7 @@ export default function FeaturesPage() {
           reverse
           number="02"
           title="AI-POWERED SUGGESTIONS"
-          description="Our AI doesn't just find exact matches. It understands your BOM and suggests alternatives that could save you money, reduce risk, or consolidate vendors. Every suggestion comes with reasoning you can audit."
+          description="Our AI doesn't just find exact matches. It analyzes your BOM and suggests alternatives based on availability, pricing tiers, and specifications. Every suggestion comes with reasoning you can audit."
           details={[
             "Alternate parts with equivalent specs",
             "Quantity optimization for price breaks",
@@ -412,7 +412,7 @@ export default function FeaturesPage() {
               </pre>
 
               <p className="font-sans text-neutral-400 mb-8 max-w-lg mx-auto">
-                Upload your first BOM and see how much time you can save.
+                Upload your first BOM and see it in action.
                 No credit card required.
               </p>
 

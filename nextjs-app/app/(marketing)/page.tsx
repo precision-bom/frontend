@@ -233,13 +233,13 @@ export default function LandingPage() {
 <span className="text-neutral-500">{`
 # Parsing 47 components...
 # Querying DigiKey API...
-# Cross-referencing Mouser inventory...`}</span>
+# AI analyzing alternatives...`}</span>
 {`
 
 ┌─────────────────────────────────────────┐
-│  STATUS: `}<span className="text-green-400">ALL PARTS IN STOCK</span>{`             │
-│  TOTAL:  `}<span className="text-white">$2,847.32</span>{`                      │
-│  SAVINGS: `}<span className="text-green-300">$423.18 (13%)</span>{`                 │
+│  `}<span className="text-green-400">45 PARTS MATCHED</span>{`                      │
+│  `}<span className="text-green-300">3 ALTERNATES SUGGESTED</span>{`                │
+│  `}<span className="text-white">2 ITEMS NEED REVIEW</span>{`                   │
 └─────────────────────────────────────────┘
 
 `}<span className="text-green-400">[✓]</span>{` Ready to export`}
@@ -259,10 +259,10 @@ export default function LandingPage() {
           <ASCIISeparator className="mb-12" />
 
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <ASCIIStat value="15M+" label="Parts" delay={0} />
-            <ASCIIStat value="2,300+" label="Suppliers" delay={100} />
-            <ASCIIStat value="REAL-TIME" label="Stock" delay={200} />
-            <ASCIIStat value="SAME-DAY" label="Shipping" delay={300} />
+            <ASCIIStat value="UPLOAD" label="Your BOM" delay={0} />
+            <ASCIIStat value="MATCH" label="Parts" delay={100} />
+            <ASCIIStat value="OPTIMIZE" label="Sourcing" delay={200} />
+            <ASCIIStat value="EXPORT" label="& Order" delay={300} />
           </div>
 
           <ASCIISeparator className="mt-12" />
@@ -298,7 +298,7 @@ export default function LandingPage() {
             <ASCIIFeatureCard
               delay={0}
               title="LIVE INVENTORY"
-              description="Real-time stock levels from DigiKey's 15M+ parts catalog. Never source discontinued parts again."
+              description="Real-time stock levels direct from DigiKey. See what's actually available right now."
             />
             <ASCIIFeatureCard
               delay={100}
@@ -308,7 +308,7 @@ export default function LandingPage() {
             <ASCIIFeatureCard
               delay={200}
               title="PRICE BREAKS"
-              description="Automatic quantity tier analysis to maximize savings across your entire BOM."
+              description="See all quantity tier pricing at a glance. Make informed decisions on order quantities."
             />
             <ASCIIFeatureCard
               delay={300}
@@ -421,7 +421,7 @@ export default function LandingPage() {
 
               <p className="font-sans text-neutral-400 text-base max-w-md mx-auto mb-8 relative z-10">
                 Start with our free tier. No credit card required.
-                Join hundreds of hardware teams already using PrecisionBOM.
+                Be an early adopter and help shape the product.
               </p>
 
               <Link

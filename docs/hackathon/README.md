@@ -10,6 +10,7 @@
 |----------|---------|
 | [SUBMISSION_CHECKLIST.md](./SUBMISSION_CHECKLIST.md) | What to submit and deadlines |
 | [PITCH_DECK.md](./PITCH_DECK.md) | Full slide content for 3-5 min pitch |
+| [FEATURE_DECK.md](./FEATURE_DECK.md) | All feature boxes as slides (23 slides) |
 | [DEMO_SCRIPT.md](./DEMO_SCRIPT.md) | Step-by-step demo walkthrough |
 | [DEMO_DATA.md](./DEMO_DATA.md) | Demo CSV files and what's in them |
 | [TEAM_RUNBOOK.md](./TEAM_RUNBOOK.md) | Who does what and when |

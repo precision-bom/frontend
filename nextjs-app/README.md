@@ -2,6 +2,8 @@
 
 Next.js 14 web application for AI-powered BOM sourcing.
 
+**Production URL**: https://precisionbom.com
+
 ## Features
 
 - **BOM Upload & Parsing** - Upload CSV/Excel BOMs for automatic parsing

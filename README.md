@@ -27,32 +27,52 @@ Multi-agent BOM processing service built with CrewAI. Specialized agents (Engine
 ### [blockchain](./blockchain)
 ERC-7827 smart contract implementation for immutable JSON state with version history. Provides forensic-grade audit trails for sourcing decisions and invoice records.
 
+## Live URLs
+
+| Service | URL |
+|---------|-----|
+| Web Application | https://precisionbom.com |
+| API (Python Agent) | https://api.precisionbom.com |
+
+**Contact**: hello@precisionbom.com
+
 ## Quick Start
 
 ### Prerequisites
 - Node.js 18+
 - Python 3.11+
 - pnpm or npm
+- make
 
-### Web Application
+### Start Everything
 ```bash
-cd nextjs-app
-npm install
-npm run dev
+make dev
 ```
 
-### Python Agent
+### Individual Services
+
+**Web Application:**
 ```bash
-cd python-agent
-uv sync
-uv run uvicorn bom_agent_service.main:app --reload
+make dev-web
+# or: cd nextjs-app && npm run dev
 ```
 
-### Smart Contracts
+**Python Agent:**
+```bash
+make dev-api
+# or: cd python-agent && uv run uvicorn bom_agent_service.main:app --reload
+```
+
+**Smart Contracts:**
 ```bash
 cd blockchain
 npm install
 npx hardhat compile
+```
+
+### Clean All
+```bash
+make clean
 ```
 
 ## Environment Variables

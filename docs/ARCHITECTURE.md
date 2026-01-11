@@ -192,17 +192,33 @@ email_verification_tokens
 ### Production Stack
 
 ```
-┌─────────────────┐     ┌─────────────────┐
-│    Vercel       │     │   Render.com    │
-│  (Next.js App)  │────▶│  (Python Agent) │
-└────────┬────────┘     └─────────────────┘
-         │
-         ▼
-┌─────────────────┐     ┌─────────────────┐
-│  Neon Postgres  │     │    Ethereum     │
-│   (Database)    │     │   (Mainnet/L2)  │
-└─────────────────┘     └─────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                      precisionbom.com                                │
+│                         (Vercel)                                     │
+└────────────────────────────┬────────────────────────────────────────┘
+                             │
+              ┌──────────────┴──────────────┐
+              ▼                              ▼
+┌─────────────────────────┐    ┌─────────────────────────────────────┐
+│   api.precisionbom.com  │    │          Neon Postgres              │
+│      (Render.com)       │    │           (Database)                │
+└─────────────────────────┘    └─────────────────────────────────────┘
+              │
+              ▼
+┌─────────────────────────┐
+│        Ethereum         │
+│       (ERC-7827)        │
+└─────────────────────────┘
 ```
+
+### URLs
+
+| Service | URL |
+|---------|-----|
+| Web Application | https://precisionbom.com |
+| Python Agent API | https://api.precisionbom.com |
+| Contact | hello@precisionbom.com |
+| Transactional Email | noreply@precisionbom.com |
 
 ### Environment Configuration
 

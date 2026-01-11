@@ -2,6 +2,8 @@
 
 Multi-agent BOM processing service built with CrewAI and FastAPI.
 
+**Production URL**: https://api.precisionbom.com
+
 ## Overview
 
 This service automates the review of electronic component sourcing through specialized AI agents:

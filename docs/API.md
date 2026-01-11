@@ -4,8 +4,10 @@
 
 | Environment | URL |
 |-------------|-----|
-| Development | `http://localhost:3000/api` |
-| Production | `https://your-domain.vercel.app/api` |
+| Development (Web) | `http://localhost:3000/api` |
+| Development (Agent) | `http://localhost:8000` |
+| Production (Web) | `https://precisionbom.com/api` |
+| Production (Agent) | `https://api.precisionbom.com` |
 
 ## Authentication
 

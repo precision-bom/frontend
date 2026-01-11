@@ -31,6 +31,7 @@ from .knowledge import (
     CategoryKnowledge,
     StoreUpdate,
 )
+from .api_key import ApiKey
 
 __all__ = [
     # Enums
@@ -60,4 +61,6 @@ __all__ = [
     "SupplierKnowledge",
     "CategoryKnowledge",
     "StoreUpdate",
+    # Auth
+    "ApiKey",
 ]

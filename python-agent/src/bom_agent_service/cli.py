@@ -908,5 +908,101 @@ Be concise and practical in your responses."""
     console.print("\n[dim]Goodbye![/]")
 
 
+# =============================================================================
+# API Key Commands
+# =============================================================================
+
+@main.group()
+def apikey():
+    """API key management for service authentication."""
+    pass
+
+
+@apikey.command("create")
+@click.option("--name", "-n", required=True, help="Name for the API key (e.g., 'nextjs-service')")
+@click.option("--scopes", "-s", default="all", help="Comma-separated scopes (default: all)")
+def apikey_create(name: str, scopes: str):
+    """Create a new API key for service authentication."""
+    from .stores import ApiKeyStore
+
+    store = ApiKeyStore("data/api_keys.db")
+    scope_list = [s.strip() for s in scopes.split(",")]
+
+    api_key, raw_key = store.create_key(name=name, scopes=scope_list)
+
+    console.print()
+    console.print(Panel.fit(
+        f"[bold green]API Key Created Successfully[/]\n\n"
+        f"[bold]Name:[/] {api_key.name}\n"
+        f"[bold]Key ID:[/] {api_key.key_id}\n"
+        f"[bold]Scopes:[/] {', '.join(api_key.scopes)}\n"
+        f"[bold]Created:[/] {api_key.created_at.strftime('%Y-%m-%d %H:%M:%S')}\n\n"
+        f"[bold yellow]API Key:[/] [bold cyan]{raw_key}[/]\n\n"
+        f"[dim italic]Save this key - it will not be shown again![/]",
+        border_style="green",
+    ))
+    console.print()
+
+
+@apikey.command("list")
+def apikey_list():
+    """List all API keys."""
+    from .stores import ApiKeyStore
+
+    store = ApiKeyStore("data/api_keys.db")
+    keys = store.list_keys()
+
+    if not keys:
+        console.print("[dim]No API keys found.[/]")
+        return
+
+    table = Table(title="API Keys", box=box.ROUNDED)
+    table.add_column("Key ID", style="cyan")
+    table.add_column("Name")
+    table.add_column("Scopes")
+    table.add_column("Active", justify="center")
+    table.add_column("Created")
+    table.add_column("Last Used")
+
+    for key in keys:
+        active = "[green]Yes[/]" if key.is_active else "[red]No[/]"
+        last_used = key.last_used.strftime("%Y-%m-%d %H:%M") if key.last_used else "[dim]Never[/]"
+        table.add_row(
+            key.key_id,
+            key.name,
+            ", ".join(key.scopes),
+            active,
+            key.created_at.strftime("%Y-%m-%d %H:%M"),
+            last_used,
+        )
+
+    console.print(table)
+
+
+@apikey.command("revoke")
+@click.argument("key_id")
+@click.confirmation_option(prompt="Are you sure you want to revoke this API key?")
+def apikey_revoke(key_id: str):
+    """Revoke an API key."""
+    from .stores import ApiKeyStore
+
+    store = ApiKeyStore("data/api_keys.db")
+
+    # Check if key exists first
+    existing = store.get_key(key_id)
+    if not existing:
+        console.print(f"[red]API key not found: {key_id}[/]")
+        return
+
+    if not existing.is_active:
+        console.print(f"[yellow]API key is already revoked: {key_id}[/]")
+        return
+
+    if store.revoke_key(key_id):
+        console.print(f"[green]Revoked API key: {key_id} ({existing.name})[/]")
+    else:
+        console.print(f"[red]Failed to revoke API key: {key_id}[/]")
+
+
 if __name__ == "__main__":
     main()

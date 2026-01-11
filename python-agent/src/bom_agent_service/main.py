@@ -6,7 +6,7 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException
 
 # Configure logging
 logging.basicConfig(
@@ -17,7 +17,8 @@ logging.basicConfig(
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from .api import projects_router, knowledge_router
+from .api import projects_router, knowledge_router, search_router
+from .auth import require_api_key
 from .flows.bom_flow import initialize_agents
 
 
@@ -47,9 +48,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include API routers
-app.include_router(projects_router)
-app.include_router(knowledge_router)
+# Include API routers with authentication
+app.include_router(projects_router, dependencies=[Depends(require_api_key)])
+app.include_router(knowledge_router, dependencies=[Depends(require_api_key)])
+app.include_router(search_router, dependencies=[Depends(require_api_key)])
 
 
 # =============================================================================
@@ -122,7 +124,7 @@ def detect_task_type(messages: list[ChatMessage]) -> tuple[str, str, str]:
         return "general_chat", system_content, user_content
 
 
-@app.post("/v1/chat/completions", response_model=ChatCompletionResponse)
+@app.post("/v1/chat/completions", response_model=ChatCompletionResponse, dependencies=[Depends(require_api_key)])
 async def create_chat_completion(request: ChatCompletionRequest):
     """OpenAI-compatible chat completions endpoint."""
     try:
@@ -158,7 +160,7 @@ async def create_chat_completion(request: ChatCompletionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/v1/models")
+@app.get("/v1/models", dependencies=[Depends(require_api_key)])
 async def list_models():
     """List available models."""
     return {

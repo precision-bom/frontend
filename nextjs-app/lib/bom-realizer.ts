@@ -5,20 +5,36 @@ import {
   RealizedLineItem,
   BomSuggestionResult,
 } from "@/types/bom";
-import { getAllConfiguredProviders, getConfiguredProviders } from "./providers";
+import { pythonClient, ProviderResult, getConfiguredProviders } from "./python-client";
 
 interface PartOffersMap {
   [bomItemId: string]: PartOffer[];
 }
 
 /**
- * Search for offers for all BOM items across ALL configured providers
+ * Convert Python ProviderResult (snake_case) to PartOffer (camelCase)
+ */
+function toPartOffer(result: ProviderResult): PartOffer {
+  return {
+    mpn: result.mpn,
+    manufacturer: result.manufacturer,
+    description: result.description,
+    price: result.price,
+    currency: result.currency,
+    stock: result.stock,
+    minQuantity: result.min_quantity,
+    provider: result.provider,
+    distributor: result.distributor,
+    url: result.url,
+  };
+}
+
+/**
+ * Search for offers for all BOM items across ALL configured providers via Python API
  */
 export async function searchAllParts(items: BomItem[]): Promise<PartOffersMap> {
-  const providers = getAllConfiguredProviders();
-  const providerNames = getConfiguredProviders();
-
-  console.log(`Searching across ${providers.length} providers: ${providerNames.join(", ")}`);
+  const providerNames = await getConfiguredProviders();
+  console.log(`Searching via Python API across ${providerNames.length} providers: ${providerNames.join(", ")}`);
 
   const offersMap: PartOffersMap = {};
 
@@ -27,30 +43,27 @@ export async function searchAllParts(items: BomItem[]): Promise<PartOffersMap> {
     offersMap[item.id] = [];
   }
 
-  // Search each provider in parallel
-  const providerSearches = providers.map(async (provider) => {
-    const itemSearches = items.map(async (item) => {
-      const query = item.mpn || item.partNumber || item.description;
-      try {
-        const offers = item.manufacturer
-          ? await provider.searchByMPN(query, item.manufacturer)
-          : await provider.search(query);
-        return { itemId: item.id, offers, provider: provider.name };
-      } catch (error) {
-        console.error(`[${provider.name}] Search failed for ${query}:`, error);
-        return { itemId: item.id, offers: [], provider: provider.name };
-      }
-    });
-    return Promise.all(itemSearches);
+  // Search all items in parallel via Python API
+  const itemSearches = items.map(async (item) => {
+    const query = item.mpn || item.partNumber || item.description;
+    try {
+      const response = await pythonClient.searchParts({
+        query,
+        manufacturer: item.manufacturer,
+      });
+      const offers = response.results.map(toPartOffer);
+      return { itemId: item.id, offers };
+    } catch (error) {
+      console.error(`Search failed for ${query}:`, error);
+      return { itemId: item.id, offers: [] };
+    }
   });
 
-  const allResults = await Promise.all(providerSearches);
+  const results = await Promise.all(itemSearches);
 
-  // Aggregate results from all providers
-  for (const providerResults of allResults) {
-    for (const { itemId, offers } of providerResults) {
-      offersMap[itemId].push(...offers);
-    }
+  // Aggregate results
+  for (const { itemId, offers } of results) {
+    offersMap[itemId].push(...offers);
   }
 
   // Log summary

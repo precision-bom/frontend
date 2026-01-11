@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDefaultProvider, getProvider, ProviderName } from "@/lib/providers";
+import { pythonClient } from "@/lib/python-client";
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,19 +13,30 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get the specified provider or default
-    const provider = providerName
-      ? getProvider(providerName as ProviderName)
-      : getDefaultProvider();
+    // Call Python API for search
+    const response = await pythonClient.searchParts({
+      query,
+      manufacturer,
+      providers: providerName ? [providerName] : undefined,
+    });
 
-    // Search by MPN if manufacturer is provided, otherwise general search
-    const results = manufacturer
-      ? await provider.searchByMPN(query, manufacturer)
-      : await provider.search(query);
+    // Convert snake_case results to camelCase for frontend compatibility
+    const results = response.results.map((r) => ({
+      mpn: r.mpn,
+      manufacturer: r.manufacturer,
+      description: r.description,
+      price: r.price,
+      currency: r.currency,
+      stock: r.stock,
+      minQuantity: r.min_quantity,
+      provider: r.provider,
+      distributor: r.distributor,
+      url: r.url,
+    }));
 
     return NextResponse.json({
       results,
-      provider: provider.name,
+      providers: response.providers_searched,
       query,
     });
   } catch (error) {

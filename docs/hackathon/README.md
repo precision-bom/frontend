@@ -17,6 +17,7 @@
 | [RECORDING_SCRIPT.md](./RECORDING_SCRIPT.md) | Script for pitch video recording |
 | [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) | Print-friendly card for the event |
 | [KEYNOTE_CONTENT.md](./KEYNOTE_CONTENT.md) | Content for remaining Keynote slides |
+| [INTEGRATIONS.md](./INTEGRATIONS.md) | Future integrations (Apify, Rilo, AI Native) |
 
 ## Demo Data Files
 

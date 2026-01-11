@@ -98,7 +98,7 @@ A: Full stack:
 - Real DigiKey/Mouser/Octopart API integrations
 - Ethereum smart contract for audit trails
 - 45 passing tests
-All in 48 hours.
+All in 30 hours.
 
 **Q: What's the team?**
 A: [Adjust based on your actual team]
@@ -204,7 +204,7 @@ Give:
 | $50B+ | Electronic component distribution market |
 | 10,000+ | Hardware startups in US |
 | 45 | Passing tests in our codebase |
-| 48 hours | Time to build this prototype |
+| 30 hours | Time to build this prototype |
 | 4 minutes | Average processing time for a BOM |
 
 ---

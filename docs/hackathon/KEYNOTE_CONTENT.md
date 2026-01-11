@@ -89,7 +89,7 @@ Blockchain Audit Trail (ERC-7827)
 
 ### Slide 6: Tech Stack
 ```
-Built in 48 Hours
+Built in 30 hours
 
 Frontend:    Next.js 16, React 18, Tailwind CSS
 AI Agents:   CrewAI, OpenAI GPT

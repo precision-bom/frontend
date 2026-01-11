@@ -620,6 +620,217 @@ WHY BLOCKCHAIN?
         </RevealOnScroll>
       </section>
 
+      {/* Tools & Sponsors */}
+      <section className="max-w-6xl mx-auto px-6 py-20 border-b-4 border-white">
+        <RevealOnScroll delay={100}>
+          <pre className="font-mono text-xs text-neutral-500 mb-8">
+{`┌────────────────────────────────────────────────────────────┐
+│  TOOLS & SPONSORS // HOW WE SHIPPED THIS IN 30 HOURS       │
+└────────────────────────────────────────────────────────────┘`}
+          </pre>
+
+          <div className="grid md:grid-cols-2 gap-8 mb-12">
+            {/* Cline */}
+            <div className="border-4 border-white hover:border-green-500 transition-all duration-300 p-6 group">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+                <pre className="font-mono text-green-500 text-lg font-bold">CLINE</pre>
+              </div>
+              <pre className="font-mono text-xs text-neutral-400 mb-4 whitespace-pre-wrap">
+{`┌─────────────────────────────────────┐
+│  AI-POWERED CODE GENERATION          │
+├─────────────────────────────────────┤
+│                                     │
+│   17,149 LINES OF CODE              │
+│   ════════════════════              │
+│                                     │
+│   4 Deployments:                    │
+│   ├── Next.js Frontend              │
+│   ├── Python Agent Service          │
+│   ├── Neon Postgres                 │
+│   └── Ethereum Contracts            │
+│                                     │
+│   Built in: 30 HOURS                │
+│                                     │
+└─────────────────────────────────────┘`}
+              </pre>
+              <p className="font-sans text-sm text-neutral-500">
+                Cline helped us write production-quality TypeScript, Python, and Solidity
+                across 4 separate deployments. Full-stack in a weekend.
+              </p>
+            </div>
+
+            {/* OpenAI + CrewAI */}
+            <div className="border-4 border-white hover:border-green-500 transition-all duration-300 p-6 group">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+                <pre className="font-mono text-green-500 text-lg font-bold">OPENAI + CREWAI</pre>
+              </div>
+              <pre className="font-mono text-xs text-neutral-400 mb-4 whitespace-pre-wrap">
+{`┌─────────────────────────────────────┐
+│  AGENT FRAMEWORK COMPARISON          │
+├─────────────────────────────────────┤
+│                                     │
+│   We tried CrewAI's native LLM...   │
+│                                     │
+│   CrewAI Default:  ~45s/agent       │
+│   GPT-5.2:         ~12s/agent  ⚡   │
+│   ────────────────────────────      │
+│   Speed Gain:      3.75x FASTER     │
+│                                     │
+│   CrewAI for orchestration          │
+│   + OpenAI GPT-5.2 for inference    │
+│   = Best of both worlds             │
+│                                     │
+└─────────────────────────────────────┘`}
+              </pre>
+              <p className="font-sans text-sm text-neutral-500">
+                CrewAI provides excellent agent orchestration, but swapping to
+                OpenAI GPT-5.2 for inference gave us 3.75x speed improvement.
+              </p>
+            </div>
+
+            {/* Rilo */}
+            <div className="border-4 border-white hover:border-green-500 transition-all duration-300 p-6 group">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+                <pre className="font-mono text-green-500 text-lg font-bold">RILO</pre>
+              </div>
+              <pre className="font-mono text-xs text-neutral-400 mb-4 whitespace-pre-wrap">
+{`┌─────────────────────────────────────┐
+│  LEAD ACQUISITION AUTOMATION         │
+├─────────────────────────────────────┤
+│                                     │
+│   getrilo.ai                        │
+│   ────────────────────────────      │
+│                                     │
+│   ✓ Email signup workflows          │
+│   ✓ LinkedIn outreach automation    │
+│   ✓ Lead enrichment pipeline        │
+│   ✓ Plain English → Workflows       │
+│                                     │
+│   "Get me signups from hardware     │
+│    engineers interested in BOM      │
+│    optimization"                    │
+│                                     │
+│   → Automated in minutes            │
+│                                     │
+└─────────────────────────────────────┘`}
+              </pre>
+              <p className="font-sans text-sm text-neutral-500">
+                Rilo turned our lead acquisition from manual outreach to automated
+                workflows. Describe what you want in plain English, get signups.
+              </p>
+            </div>
+
+            {/* AI Native Studio */}
+            <div className="border-4 border-white hover:border-green-500 transition-all duration-300 p-6 group">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+                <pre className="font-mono text-green-500 text-lg font-bold">AI NATIVE STUDIO</pre>
+              </div>
+              <pre className="font-mono text-xs text-neutral-400 mb-4 whitespace-pre-wrap">
+{`┌─────────────────────────────────────┐
+│  NEXT-GEN DEV ENVIRONMENT            │
+├─────────────────────────────────────┤
+│                                     │
+│   ainative.studio                   │
+│   ────────────────────────────      │
+│                                     │
+│   Used for:                         │
+│   ├── Rapid prototyping             │
+│   ├── Code quality analysis         │
+│   ├── AI-assisted debugging         │
+│   └── Architecture exploration      │
+│                                     │
+│   Rating: ⭐ 4.9/5 (127 reviews)    │
+│                                     │
+│   "Quantum-enhanced code analysis"  │
+│                                     │
+└─────────────────────────────────────┘`}
+              </pre>
+              <p className="font-sans text-sm text-neutral-500">
+                AI Native Studio helped with rapid prototyping and code quality
+                checks during our speed-focused hackathon development.
+              </p>
+            </div>
+          </div>
+
+          {/* Apify Integration - Coming Soon */}
+          <div className="border-4 border-dashed border-neutral-700 hover:border-green-500/50 transition-all duration-300 p-8">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <div className="w-3 h-3 bg-yellow-500 rounded-full animate-pulse" />
+                <pre className="font-mono text-yellow-500 text-lg font-bold">APIFY INTEGRATION</pre>
+                <span className="font-mono text-xs text-neutral-600 border border-neutral-700 px-2 py-1">[ROADMAP]</span>
+              </div>
+            </div>
+            <pre className="font-mono text-xs text-neutral-500 mb-6 whitespace-pre-wrap">
+{`┌─────────────────────────────────────────────────────────────────────────┐
+│  PLANNED: REAL-TIME SUPPLIER SCRAPING                                   │
+├─────────────────────────────────────────────────────────────────────────┤
+│                                                                         │
+│   apify.com - Web Scraping at Scale                                     │
+│   ─────────────────────────────────                                     │
+│                                                                         │
+│   Current State:          Planned Integration:                          │
+│   ───────────────         ────────────────────                          │
+│   DigiKey API ────────►   DigiKey API + Scraper Fallback                │
+│   Mouser API  ────────►   Mouser API + Scraper Fallback                 │
+│   Octopart API ───────►   Octopart + Direct Manufacturer Scraping       │
+│                                                                         │
+│   NEW CAPABILITIES:                                                     │
+│   ├── Scrape manufacturer sites directly (TI, STM, Murata)             │
+│   ├── Monitor competitor pricing in real-time                          │
+│   ├── Extract datasheets and compliance docs automatically             │
+│   ├── Track inventory across 50+ regional distributors                 │
+│   └── Anti-blocking proxy rotation for reliable data                   │
+│                                                                         │
+│   13,000+ pre-built scrapers in Apify marketplace                       │
+│                                                                         │
+└─────────────────────────────────────────────────────────────────────────┘`}
+            </pre>
+            <p className="font-sans text-sm text-neutral-500">
+              Next phase: Integrate Apify for comprehensive supplier scraping when APIs
+              are unavailable or rate-limited. Direct manufacturer data extraction
+              for parts not in distributor catalogs.
+            </p>
+          </div>
+
+          {/* Stats Summary */}
+          <div className="mt-12 border-4 border-green-500 bg-green-950/20 p-8">
+            <pre className="font-mono text-green-500 text-sm mb-6 text-center">
+{`╔═══════════════════════════════════════════════════════════════╗
+║  THE FLEX SUMMARY // WHAT WE SHIPPED                          ║
+╚═══════════════════════════════════════════════════════════════╝`}
+            </pre>
+
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-6 text-center">
+              <div>
+                <div className="font-mono text-3xl text-green-400 font-bold">17,149</div>
+                <div className="font-mono text-xs text-neutral-400">LINES OF CODE</div>
+              </div>
+              <div>
+                <div className="font-mono text-3xl text-green-400 font-bold">30</div>
+                <div className="font-mono text-xs text-neutral-400">HOURS TO BUILD</div>
+              </div>
+              <div>
+                <div className="font-mono text-3xl text-green-400 font-bold">4</div>
+                <div className="font-mono text-xs text-neutral-400">DEPLOYMENTS</div>
+              </div>
+              <div>
+                <div className="font-mono text-3xl text-green-400 font-bold">3.75x</div>
+                <div className="font-mono text-xs text-neutral-400">SPEED GAIN</div>
+              </div>
+              <div>
+                <div className="font-mono text-3xl text-green-400 font-bold">5</div>
+                <div className="font-mono text-xs text-neutral-400">AI TOOLS USED</div>
+              </div>
+            </div>
+          </div>
+        </RevealOnScroll>
+      </section>
+
       {/* CTA */}
       <section className="max-w-6xl mx-auto px-6 py-24">
         <RevealOnScroll delay={100}>

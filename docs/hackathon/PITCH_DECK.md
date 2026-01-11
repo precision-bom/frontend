@@ -195,7 +195,7 @@ Demo flow:
 ║  SUPPLIERS         DigiKey, Mouser, Octopart APIs            ║
 ║  ─────────         Real-time inventory + pricing             ║
 ║                                                              ║
-║  BUILT IN          48 HOURS                                  ║
+║  BUILT IN          30 hours                                  ║
 ║                    45 passing tests                          ║
 ║                                                              ║
 ╚══════════════════════════════════════════════════════════════╝
@@ -299,5 +299,5 @@ A: Medical device companies need audit trails for FDA compliance. Blockchain pro
 **Q: What's your competitive moat?**
 A: Multi-agent architecture is hard to replicate. We're building domain-specific knowledge bases. First-mover in AI-native BOM optimization. Blockchain audit is unique differentiator for regulated industries.
 
-**Q: How did you build this in 48 hours?**
+**Q: How did you build this in 30 hours?**
 A: CrewAI for agent orchestration, Next.js for rapid frontend, FastAPI for type-safe backend. Pre-existing knowledge of the hardware sourcing domain. Focused on end-to-end flow over polish.

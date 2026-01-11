@@ -10,7 +10,7 @@
 | Our time | **4 minutes** |
 | Market size | **$50B+** |
 | Tests passing | **45** |
-| Build time | **48 hours** |
+| Build time | **30 hours** |
 
 ---
 

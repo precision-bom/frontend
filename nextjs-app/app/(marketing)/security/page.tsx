@@ -224,7 +224,7 @@ export default function SecurityPage() {
             </div>
 
             <p>
-              We commit to acknowledging reports within 48 hours and will work with you
+              We commit to acknowledging reports within 30 hours and will work with you
               to understand and address valid security concerns.
             </p>
           </div>

@@ -63,12 +63,32 @@ const config: Config = {
         ],
         sans: [
           "Inter",
-          "-apple-system",
-          "BlinkMacSystemFont",
-          "Segoe UI",
-          "Roboto",
+          "Helvetica Neue",
+          "Arial",
           "sans-serif",
         ],
+        display: [
+          "SF Pro Display",
+          "Inter",
+          "Helvetica Neue",
+          "-apple-system",
+          "BlinkMacSystemFont",
+          "sans-serif",
+        ],
+        brutalist: [
+          "JetBrains Mono",
+          "SF Mono",
+          "Consolas",
+          "monospace",
+        ],
+      },
+      fontSize: {
+        "display-xl": ["4.5rem", { lineHeight: "1", letterSpacing: "-0.02em" }],
+        "display-lg": ["3.5rem", { lineHeight: "1.1", letterSpacing: "-0.02em" }],
+        headline: ["2rem", { lineHeight: "1.2", letterSpacing: "-0.01em" }],
+        subhead: ["1.25rem", { lineHeight: "1.4" }],
+        body: ["1rem", { lineHeight: "1.6" }],
+        caption: ["0.75rem", { lineHeight: "1.4", letterSpacing: "0.05em" }],
       },
       backgroundImage: {
         "grid-pattern":

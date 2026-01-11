@@ -73,47 +73,89 @@ export default function MarketingLayout({
         {/* Subtle gradient */}
         <div className="absolute inset-0 bg-gradient-to-r from-green-500/5 via-transparent to-green-500/5 pointer-events-none" />
 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 relative z-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 relative z-10">
           {/* ASCII Divider */}
           <pre className="font-mono text-xs text-center mb-8">
             <span className="text-green-500/50">════════════════════════════════════════</span>
             <span className="text-green-400/30">════════════════════════════════════════</span>
           </pre>
 
-          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
             {/* Brand */}
-            <div className="flex items-center gap-6">
+            <div className="md:col-span-1">
               <span className="font-mono text-sm font-bold tracking-tighter">
                 PRECISION<span className="text-green-500">BOM</span>
               </span>
-              <span className="hidden sm:block text-neutral-600 text-xs font-mono">
+              <p className="mt-2 text-neutral-600 text-xs font-mono">
                 <span className="text-green-500">//</span> AI-POWERED BOM SOURCING
-              </span>
-            </div>
-
-            {/* Links */}
-            <div className="flex items-center gap-6 font-mono text-xs text-neutral-500 uppercase tracking-wider">
-              <Link href="/features" className="hover:text-green-500 transition-colors">
-                FEATURES
-              </Link>
-              <Link href="/about" className="hover:text-green-500 transition-colors">
-                ABOUT
-              </Link>
-              <Link href="/privacy" className="hover:text-green-500 transition-colors">
-                PRIVACY
-              </Link>
-              <Link href="/terms" className="hover:text-green-500 transition-colors">
-                TERMS
-              </Link>
-            </div>
-
-            {/* Status */}
-            <div className="flex items-center gap-3 font-mono text-xs text-neutral-600">
-              <span className="flex items-center gap-1.5">
+              </p>
+              <div className="mt-4 flex items-center gap-2 font-mono text-xs text-neutral-600">
                 <span className="inline-block w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 <span className="text-green-500">OPERATIONAL</span>
-              </span>
-              <span>© {new Date().getFullYear()}</span>
+              </div>
+            </div>
+
+            {/* Product */}
+            <div>
+              <h4 className="font-mono text-xs text-green-500 uppercase tracking-wider mb-4">
+                [PRODUCT]
+              </h4>
+              <div className="flex flex-col gap-2 font-mono text-xs text-neutral-500 uppercase tracking-wider">
+                <Link href="/features" className="hover:text-green-500 transition-colors">
+                  FEATURES
+                </Link>
+                <Link href="/about" className="hover:text-green-500 transition-colors">
+                  ABOUT
+                </Link>
+              </div>
+            </div>
+
+            {/* Legal */}
+            <div>
+              <h4 className="font-mono text-xs text-green-500 uppercase tracking-wider mb-4">
+                [LEGAL]
+              </h4>
+              <div className="flex flex-col gap-2 font-mono text-xs text-neutral-500 uppercase tracking-wider">
+                <Link href="/terms" className="hover:text-green-500 transition-colors">
+                  TERMS
+                </Link>
+                <Link href="/privacy" className="hover:text-green-500 transition-colors">
+                  PRIVACY
+                </Link>
+                <Link href="/cookies" className="hover:text-green-500 transition-colors">
+                  COOKIES
+                </Link>
+                <Link href="/acceptable-use" className="hover:text-green-500 transition-colors">
+                  ACCEPTABLE USE
+                </Link>
+              </div>
+            </div>
+
+            {/* Security & Compliance */}
+            <div>
+              <h4 className="font-mono text-xs text-green-500 uppercase tracking-wider mb-4">
+                [SECURITY]
+              </h4>
+              <div className="flex flex-col gap-2 font-mono text-xs text-neutral-500 uppercase tracking-wider">
+                <Link href="/security" className="hover:text-green-500 transition-colors">
+                  SECURITY
+                </Link>
+                <Link href="/dmca" className="hover:text-green-500 transition-colors">
+                  DMCA
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom bar */}
+          <div className="pt-8 border-t border-neutral-800 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <span className="font-mono text-xs text-neutral-600">
+              © {new Date().getFullYear()} PrecisionBOM. All rights reserved.
+            </span>
+            <div className="flex items-center gap-4 font-mono text-xs text-neutral-600">
+              <a href="mailto:legal@precisionbom.io" className="hover:text-green-500 transition-colors">
+                legal@precisionbom.io
+              </a>
             </div>
           </div>
 

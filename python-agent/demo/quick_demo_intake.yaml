@@ -1,0 +1,45 @@
+# Quick Demo - NeuroLink Mini (Simplified)
+# Use this for faster demo processing
+
+project:
+  name: "NeuroLink Mini - Quick Demo"
+  id: "DEMO-001"
+  owner: "demo@precisionbom.com"
+
+requirements:
+  product_type: "medical"
+  quantity: 50
+  deadline: "2026-04-15"
+  budget_total: 15000.00
+
+compliance:
+  standards:
+    - "RoHS"
+    - "IEC 60601-1"
+    - "FDA Class II"
+  quality_class: "IPC Class 3"
+
+sourcing_constraints:
+  allow_brokers: false
+  allow_alternates: true
+  preferred_distributors:
+    - "digikey"
+    - "mouser"
+  max_lead_time_days: 21
+
+engineering_context:
+  notes: |
+    Medical-grade neural signal acquisition device.
+    Ultra-low noise power supplies required.
+    ADS1299 is critical - no substitutes.
+
+  critical_parts:
+    - "U1"  # ADS1299
+    - "U4"  # Digital isolator
+    - "J1"  # Medical connector
+
+  preferred_manufacturers:
+    capacitors: ["Murata", "TDK"]
+    resistors: ["Panasonic", "Vishay"]
+    mcu: ["STMicroelectronics"]
+    connectors: ["Harwin", "Amphenol"]

@@ -277,14 +277,21 @@ export default function PrivacyPage() {
         </section>
 
         {/* Navigation */}
-        <div className="pt-8 border-t-4 border-white">
+        <div className="pt-8 border-t-4 border-white flex justify-between items-center">
+          <Link
+            href="/dmca"
+            className="inline-flex items-center gap-2 text-green-500 hover:text-green-300 font-mono text-sm uppercase tracking-wider transition-all duration-200 group"
+          >
+            <span className="group-hover:-translate-x-1 transition-transform duration-200">←</span>
+            <span>───</span>
+            DMCA
+          </Link>
           <Link
             href="/terms"
             className="inline-flex items-center gap-2 text-green-500 hover:text-green-300 font-mono text-sm uppercase tracking-wider transition-all duration-200 group"
           >
-            <span className="animate-pulse">●</span>
+            TERMS OF SERVICE
             <span>───</span>
-            VIEW TERMS OF SERVICE
             <span className="group-hover:translate-x-1 transition-transform duration-200">→</span>
           </Link>
         </div>

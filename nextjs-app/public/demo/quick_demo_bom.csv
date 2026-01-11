@@ -1,0 +1,8 @@
+Reference,Quantity,MPN,Manufacturer,Description
+U1,1,ADS1299-6PAGR,Texas Instruments,8-Channel 24-Bit Neural ADC - CRITICAL
+U2,1,STM32H743ZIT6,STMicroelectronics,ARM Cortex-M7 MCU 480MHz 2MB Flash
+U3,1,TPS7A4901DGNT,Texas Instruments,Ultra-Low-Noise LDO 3.3V - Analog Supply
+U4,1,ISO7741FDBQR,Texas Instruments,Quad Digital Isolator - Patient Safety
+C1-C5,5,GRM188R71H104KA93D,Murata,MLCC 100nF 50V X7R 0603
+R1-R4,4,ERA-3AEB4991V,Panasonic,Precision Resistor 4.99K 0.1%
+J1,1,M80-5101042,Harwin,Medical Grade Header 10-pos - CRITICAL

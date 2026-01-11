@@ -1,0 +1,65 @@
+# NeuroLink Mini v1.0 - Portable Brain-Computer Interface
+# Medical Device Project Intake Sheet
+
+project:
+  name: "NeuroLink Mini v1.0"
+  id: "NL-2026-001"
+  owner: "sarah.chen@neurolink.bio"
+  engineering_contact: "david.park@neurolink.bio"
+
+requirements:
+  product_type: "medical"
+  quantity: 50
+  deadline: "2026-04-15"
+  budget_total: 15000.00
+
+compliance:
+  standards:
+    - "RoHS"
+    - "IEC 60601-1"
+    - "ISO 13485"
+    - "FDA Class II"
+  quality_class: "IPC Class 3"
+  country_of_origin_restrictions: []
+
+sourcing_constraints:
+  allow_brokers: false
+  allow_alternates: true
+  single_source_ok: false
+  preferred_distributors:
+    - "digikey"
+    - "mouser"
+    - "newark"
+  max_lead_time_days: 21
+
+engineering_context:
+  notes: |
+    CRITICAL DESIGN REQUIREMENTS:
+    - Medical-grade neural signal acquisition device for research
+    - Ultra-low noise power supplies required for analog front-end
+    - Must use medical-grade connectors for patient contact
+    - ESD protection mandatory on all patient-facing interfaces
+    - ADS1299 is the heart of the system - NO SUBSTITUTES
+    - STM32H7 required for real-time DSP capabilities
+    - USB isolation required for patient safety (IEC 60601-1)
+    - All precision resistors must be 0.1% or better
+
+  critical_parts:
+    - "U1"  # ADS1299 - Neural ADC, irreplaceable
+    - "U2"  # STM32H7 - Main processor
+    - "U3"  # Analog LDO - noise critical
+    - "U5"  # Instrumentation amp
+    - "U6"  # Digital isolator - patient safety
+    - "J2"  # Medical connector - patient interface
+
+  preferred_manufacturers:
+    capacitors: ["Murata", "TDK", "KEMET"]
+    resistors: ["Panasonic", "Vishay", "Yageo"]
+    mcu: ["STMicroelectronics"]
+    connectors: ["Harwin", "Amphenol", "Hirose"]
+
+  avoid_parts:
+    - mpn: "ADS1298"
+      reason: "Insufficient channels - need full 8-channel ADS1299"
+    - mpn: "STM32F4"
+      reason: "Insufficient DSP performance for real-time neural processing"

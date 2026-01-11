@@ -26,18 +26,30 @@ Verify: Open http://localhost:3000 in browser
 
 ### 2. Prepare Demo Data
 
-Ensure sample BOM exists:
+**Option A: Full Demo (20 parts, ~90 sec processing)**
 ```bash
-cat /Users/jacob/fun/precision-bom/precisionBOM/python-agent/sample_bom.csv
+# Web UI - file at: nextjs-app/public/demo/neurolink_bom.csv
+# CLI:
+cd /Users/jacob/fun/precision-bom/precisionBOM/python-agent
+uv run sourcing process demo/neurolink_bom.csv --intake demo/neurolink_intake.yaml
 ```
 
-Pre-process a project so you have results ready:
+**Option B: Quick Demo (7 parts, ~30 sec processing) - RECOMMENDED FOR LIVE**
+```bash
+# Web UI - file at: nextjs-app/public/demo/quick_demo_bom.csv
+# CLI:
+cd /Users/jacob/fun/precision-bom/precisionBOM/python-agent
+uv run sourcing process demo/quick_demo_bom.csv --intake demo/quick_demo_intake.yaml
+```
+
+Pre-process BOTH so you have results ready:
 ```bash
 cd /Users/jacob/fun/precision-bom/precisionBOM/python-agent
-uv run sourcing process sample_bom.csv --intake project_intake.yaml
+uv run sourcing process demo/quick_demo_bom.csv --intake demo/quick_demo_intake.yaml
+uv run sourcing process demo/neurolink_bom.csv --intake demo/neurolink_intake.yaml
 ```
 
-Note the project ID for demo.
+Note the project IDs for demo (`uv run sourcing status`).
 
 ### 3. Browser Setup
 
@@ -91,7 +103,8 @@ Note the project ID for demo.
 
 **ACTION**:
 1. Click upload area
-2. Select `sample_bom.csv`
+2. Select `quick_demo_bom.csv` (7 parts, faster) or `neurolink_bom.csv` (20 parts, more impressive)
+   - Files are in: `nextjs-app/public/demo/`
 3. Show the parsed table briefly
 
 **SAY**: "The system parses the CSV and identifies each part."

@@ -1,0 +1,21 @@
+Reference,Quantity,MPN,Manufacturer,Description
+U1,1,ADS1299-6PAGR,Texas Instruments,8-Channel 24-Bit Neural ADC - CRITICAL
+U2,1,STM32H743ZIT6,STMicroelectronics,ARM Cortex-M7 MCU 480MHz 2MB Flash
+U3,1,TPS7A4901DGNT,Texas Instruments,Ultra-Low-Noise LDO 3.3V 150mA - Analog Supply
+U4,1,TPS7A8801DSGR,Texas Instruments,Ultra-Low-Noise LDO 1.8V 1A - Digital Supply
+U5,1,INA333AIDGKR,Texas Instruments,Micro-Power Instrumentation Amplifier - CRITICAL
+U6,1,ISO7741FDBQR,Texas Instruments,Quad Digital Isolator 100Mbps - Patient Safety
+U7,1,CP2102N-A02-GQFN24,Silicon Labs,USB-to-UART Bridge Controller
+U8,1,W25Q128JVSIQ,Winbond,128Mbit SPI Flash Memory
+C1-C10,10,GRM188R71H104KA93D,Murata,MLCC 100nF 50V X7R 0603
+C11-C15,5,GRM21BR61E106KA73L,Murata,MLCC 10uF 25V X5R 0805
+C16-C20,5,T520B107M006ATE070,KEMET,Tantalum 100uF 6.3V Low ESR
+R1-R8,8,RC0603FR-0710KL,Yageo,Thin Film Resistor 10K 1% 0603
+R9-R12,4,RC0603FR-07100RL,Yageo,Thin Film Resistor 100R 1% 0603
+R13-R16,4,ERA-3AEB4991V,Panasonic,Precision Resistor 4.99K 0.1% - Critical Path
+L1,1,LQH32CN100K53L,Murata,Ferrite Inductor 10uH 700mA
+J1,1,10118192-0001LF,Amphenol,USB Type-C Receptacle SMD
+J2,1,M80-5101042,Harwin,Medical Grade Header 10-pos 2mm - CRITICAL
+ESD1-ESD4,4,PESD5V0S1BL,Nexperia,ESD Protection TVS 5V
+Y1,1,ECS-240-20-30B-DU,ECS,Crystal 24MHz 20ppm
+LED1-LED3,3,LTST-C171KGKT,Lite-On,Green Status LED 0603

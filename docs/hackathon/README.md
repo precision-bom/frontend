@@ -11,9 +11,20 @@
 | [SUBMISSION_CHECKLIST.md](./SUBMISSION_CHECKLIST.md) | What to submit and deadlines |
 | [PITCH_DECK.md](./PITCH_DECK.md) | Full slide content for 3-5 min pitch |
 | [DEMO_SCRIPT.md](./DEMO_SCRIPT.md) | Step-by-step demo walkthrough |
+| [DEMO_DATA.md](./DEMO_DATA.md) | Demo CSV files and what's in them |
 | [TEAM_RUNBOOK.md](./TEAM_RUNBOOK.md) | Who does what and when |
 | [TALKING_POINTS.md](./TALKING_POINTS.md) | Key messages for judges/networking |
 | [RECORDING_SCRIPT.md](./RECORDING_SCRIPT.md) | Script for pitch video recording |
+| [QUICK_REFERENCE.md](./QUICK_REFERENCE.md) | Print-friendly card for the event |
+
+## Demo Data Files
+
+| File | Location | Parts | Use Case |
+|------|----------|-------|----------|
+| `quick_demo_bom.csv` | `nextjs-app/public/demo/` | 7 | **Live demo** (fast processing) |
+| `neurolink_bom.csv` | `nextjs-app/public/demo/` | 20 | Video recording (more impressive) |
+| `quick_demo_intake.yaml` | `python-agent/demo/` | - | Project context for quick demo |
+| `neurolink_intake.yaml` | `python-agent/demo/` | - | Full project context |
 
 ## Timeline (Day 2 - Sunday Jan 11)
 

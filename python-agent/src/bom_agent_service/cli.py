@@ -2,6 +2,7 @@
 """CLI tool for BOM Agent Service - uses API endpoints."""
 
 import sys
+import time
 from pathlib import Path
 
 import click
@@ -10,10 +11,31 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
+from rich.text import Text
+from rich.live import Live
 from rich import box
 
 console = Console()
 DEFAULT_API_URL = "http://localhost:8000"
+
+# Agent colors for visual distinction (light-background friendly)
+AGENT_COLORS = {
+    "EngineeringAgent": "dark_cyan",
+    "SourcingAgent": "dark_green",
+    "FinanceAgent": "dark_orange",
+    "FinalDecisionAgent": "dark_magenta",
+}
+
+STEP_ICONS = {
+    "intake": "📥",
+    "enrich": "🔍",
+    "parallel_review": "⚡",
+    "engineering": "🔧",
+    "sourcing": "📦",
+    "finance": "💰",
+    "final_decision": "⚖️",
+    "complete": "✅",
+}
 
 
 class APIClient:
@@ -139,6 +161,66 @@ def get_client(url: str) -> APIClient:
     return client
 
 
+def format_trace_step(step: dict, show_reasoning: bool = True, duration_ms: int = None) -> Text:
+    """Format a trace step for rich output."""
+    text = Text()
+    timestamp = step.get("timestamp", "")[:19].replace("T", " ")
+    icon = STEP_ICONS.get(step.get("step"), "•")
+    agent = step.get("agent")
+
+    # Build the header line
+    text.append(f"{timestamp} ", style="dim")
+    text.append(f"{icon} ", style="bold")
+    text.append(f"[{step.get('step')}] ", style="bold blue")
+
+    if agent:
+        agent_color = AGENT_COLORS.get(agent, "default")
+        text.append(f"[{agent}] ", style=f"bold {agent_color}")
+
+    text.append(step.get("message", ""), style="default")
+
+    # Add duration if provided
+    if duration_ms is not None and duration_ms > 0:
+        if duration_ms >= 1000:
+            text.append(f" ({duration_ms/1000:.1f}s)", style="dim")
+        else:
+            text.append(f" ({duration_ms}ms)", style="dim")
+
+    # Add reasoning on next line if present
+    if show_reasoning and step.get("reasoning"):
+        text.append("\n         └─ ", style="dim")
+        text.append(step.get("reasoning"), style="italic dark_cyan")
+
+    return text
+
+
+def print_trace_step(step: dict, show_reasoning: bool = True, duration_ms: int = None):
+    """Print a single trace step."""
+    console.print(format_trace_step(step, show_reasoning, duration_ms))
+
+
+def calculate_step_durations(trace_data: list[dict]) -> list[int]:
+    """Calculate duration in ms for each step based on timestamps."""
+    from datetime import datetime
+
+    durations = []
+    for i, step in enumerate(trace_data):
+        if i == 0:
+            durations.append(0)
+        else:
+            try:
+                prev_ts = trace_data[i-1].get("timestamp", "")
+                curr_ts = step.get("timestamp", "")
+                # Parse ISO format timestamps
+                prev_dt = datetime.fromisoformat(prev_ts.replace("Z", "+00:00"))
+                curr_dt = datetime.fromisoformat(curr_ts.replace("Z", "+00:00"))
+                duration_ms = int((curr_dt - prev_dt).total_seconds() * 1000)
+                durations.append(max(0, duration_ms))
+            except (ValueError, TypeError):
+                durations.append(0)
+    return durations
+
+
 @click.group()
 @click.option("--api-url", envvar="BOM_API_URL", default=DEFAULT_API_URL, help="API base URL")
 @click.version_option(version="0.1.0")
@@ -156,16 +238,20 @@ def main(ctx, api_url: str):
 @main.command()
 @click.argument("bom", type=click.Path(exists=True))
 @click.option("--intake", "-i", type=click.Path(exists=True), help="Project intake YAML file")
+@click.option("--watch", "-w", is_flag=True, help="Watch progress in real-time (requires second terminal)")
 @click.option("--verbose", "-v", is_flag=True, help="Show detailed output")
 @click.pass_context
-def process(ctx, bom: str, intake: str | None, verbose: bool):
+def process(ctx, bom: str, intake: str | None, watch: bool, verbose: bool):
     """Process a BOM through the full agent flow.
 
     BOM is the path to a CSV file containing the bill of materials.
+
+    Use --watch to see step-by-step progress. This runs the API call in
+    the background and polls for updates.
     """
     console.print(Panel.fit(
-        "[bold cyan]BOM Processing Flow[/]",
-        border_style="cyan",
+        "[bold dark_cyan]BOM Processing Flow[/]",
+        border_style="dark_cyan",
     ))
 
     client = get_client(ctx.obj["api_url"])
@@ -175,39 +261,165 @@ def process(ctx, bom: str, intake: str | None, verbose: bool):
         console.print(f"[bold]Intake:[/] {intake}")
     console.print()
 
-    with Progress(
-        SpinnerColumn(),
-        TextColumn("[progress.description]{task.description}"),
-        console=console,
-    ) as progress:
-        progress.add_task("[cyan]Processing BOM (this may take a while)...", total=None)
+    if watch:
+        # Run with watching - use threading to poll while processing
+        import threading
+        import queue
 
-        try:
-            result = client.upload_and_process(bom, intake)
-        except httpx.HTTPStatusError as e:
-            console.print(f"\n[red]Error: {e.response.text}[/]")
+        result_queue = queue.Queue()
+
+        # Get existing project state to detect changes
+        existing_projects = {p["project_id"]: p["updated_at"] for p in client.list_projects()}
+
+        def do_process():
+            try:
+                result = client.upload_and_process(bom, intake)
+                result_queue.put(("success", result))
+            except Exception as e:
+                result_queue.put(("error", str(e)))
+
+        # Start processing in background thread
+        thread = threading.Thread(target=do_process)
+        thread.start()
+
+        console.print("[dim]Processing started, watching for updates...[/dim]")
+        console.print()
+
+        # Poll for new or updated project
+        project_id = None
+        max_wait = 30
+        waited = 0
+        while project_id is None and waited < max_wait and thread.is_alive():
+            projects = client.list_projects()
+            for p in projects:
+                # Check for completely new project
+                if p["project_id"] not in existing_projects:
+                    project_id = p["project_id"]
+                    break
+                # Check if an existing project is being re-processed (updated timestamp changed)
+                if p["updated_at"] != existing_projects.get(p["project_id"]):
+                    project_id = p["project_id"]
+                    break
+                # Check if an existing project is currently processing
+                if p["status"] not in ("complete", "failed"):
+                    project_id = p["project_id"]
+                    break
+            time.sleep(0.2)
+            waited += 0.2
+
+        if project_id:
+            console.print(f"[dim]Watching project: {project_id}[/dim]")
+            console.print()
+
+            # Watch the project with timing and spinner
+            seen_steps = 0
+            last_timestamp = None
+            spinner_chars = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"
+            spinner_idx = 0
+            last_step_time = time.time()
+
+            while thread.is_alive():
+                try:
+                    trace_data = client.get_trace(project_id)
+                    if len(trace_data) > seen_steps:
+                        # Clear spinner line if we were showing one
+                        console.print("\r" + " " * 60 + "\r", end="")
+
+                        for step in trace_data[seen_steps:]:
+                            duration_ms = None
+                            if last_timestamp:
+                                try:
+                                    from datetime import datetime
+                                    curr_ts = step.get("timestamp", "")
+                                    prev_dt = datetime.fromisoformat(last_timestamp.replace("Z", "+00:00"))
+                                    curr_dt = datetime.fromisoformat(curr_ts.replace("Z", "+00:00"))
+                                    duration_ms = int((curr_dt - prev_dt).total_seconds() * 1000)
+                                    if duration_ms < 0:
+                                        duration_ms = 0
+                                except (ValueError, TypeError):
+                                    pass
+                            print_trace_step(step, show_reasoning=True, duration_ms=duration_ms)
+                            last_timestamp = step.get("timestamp")
+                        seen_steps = len(trace_data)
+                        last_step_time = time.time()
+                    else:
+                        # Show spinner while waiting for LLM
+                        elapsed = time.time() - last_step_time
+                        if elapsed > 1.0:  # Only show after 1 second of waiting
+                            spinner = spinner_chars[spinner_idx % len(spinner_chars)]
+                            console.print(f"\r[dim]{spinner} Waiting for LLM response... ({elapsed:.0f}s)[/dim]", end="")
+                            spinner_idx += 1
+                except Exception:
+                    pass
+                time.sleep(0.2)
+
+            # Clear spinner line
+            console.print("\r" + " " * 60 + "\r", end="")
+
+            # Get any remaining trace entries after thread completes
+            try:
+                trace_data = client.get_trace(project_id)
+                for step in trace_data[seen_steps:]:
+                    duration_ms = None
+                    if last_timestamp:
+                        try:
+                            from datetime import datetime
+                            curr_ts = step.get("timestamp", "")
+                            prev_dt = datetime.fromisoformat(last_timestamp.replace("Z", "+00:00"))
+                            curr_dt = datetime.fromisoformat(curr_ts.replace("Z", "+00:00"))
+                            duration_ms = int((curr_dt - prev_dt).total_seconds() * 1000)
+                            if duration_ms < 0:
+                                duration_ms = 0
+                        except (ValueError, TypeError):
+                            pass
+                    print_trace_step(step, show_reasoning=True, duration_ms=duration_ms)
+                    last_timestamp = step.get("timestamp")
+            except Exception:
+                pass
+
+        # Get the result
+        thread.join()
+        status, result = result_queue.get()
+
+        if status == "error":
+            console.print(f"\n[red]Error: {result}[/]")
             sys.exit(1)
-        except Exception as e:
-            console.print(f"\n[red]Error: {e}[/]")
-            sys.exit(1)
+
+    else:
+        # Standard processing with spinner
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            console=console,
+        ) as progress:
+            progress.add_task("[dark_cyan]Processing BOM (this may take a while)...", total=None)
+
+            try:
+                result = client.upload_and_process(bom, intake)
+            except httpx.HTTPStatusError as e:
+                console.print(f"\n[red]Error: {e.response.text}[/]")
+                sys.exit(1)
+            except Exception as e:
+                console.print(f"\n[red]Error: {e}[/]")
+                sys.exit(1)
 
     # Display results
     console.print()
     console.print(Panel.fit(
-        f"[bold green]Project Complete[/]\n"
+        f"[bold dark_green]Project Complete[/]\n"
         f"ID: {result['project_id']}\n"
         f"Status: {result['status']}\n"
         f"Message: {result['message']}",
-        border_style="green",
+        border_style="dark_green",
     ))
 
     # Fetch full project details
     project = client.get_project(result["project_id"])
     if project:
         table = Table(title="Line Item Summary", box=box.ROUNDED)
-        table.add_column("MPN", style="cyan")
+        table.add_column("MPN", style="dark_cyan")
         table.add_column("Qty", justify="right")
-        table.add_column("Status", style="yellow")
+        table.add_column("Status", style="dark_orange")
 
         for item in project.get("line_items", []):
             table.add_row(
@@ -296,9 +508,11 @@ def status(ctx, project_id: str | None):
 
 @main.command()
 @click.argument("project_id")
+@click.option("--no-reasoning", is_flag=True, help="Hide agent reasoning")
+@click.option("--no-timing", is_flag=True, help="Hide step timing")
 @click.pass_context
-def trace(ctx, project_id: str):
-    """Show project execution trace."""
+def trace(ctx, project_id: str, no_reasoning: bool, no_timing: bool):
+    """Show project execution trace with agent reasoning and timing."""
     client = get_client(ctx.obj["api_url"])
 
     try:
@@ -312,22 +526,98 @@ def trace(ctx, project_id: str):
 
     console.print(Panel.fit(
         f"[bold]Execution Trace[/] for {project_id}",
-        border_style="cyan",
+        border_style="dark_cyan",
     ))
 
     if not trace_data:
         console.print("[dim]No trace entries.[/]")
         return
 
-    for i, step in enumerate(trace_data, 1):
-        agent_str = f" [yellow]({step.get('agent')})[/]" if step.get("agent") else ""
-        console.print(f"\n[bold]{i}. [{step.get('step')}][/]{agent_str}")
-        console.print(f"   {step.get('message')}")
-        if step.get("reasoning"):
-            console.print(f"   [dim]Reasoning: {step.get('reasoning')}[/]")
-        if step.get("references"):
-            console.print(f"   [dim]References: {', '.join(step.get('references'))}[/]")
-        console.print(f"   [dim]{step.get('timestamp')}[/]")
+    # Calculate durations between steps
+    durations = calculate_step_durations(trace_data) if not no_timing else [0] * len(trace_data)
+
+    for step, duration in zip(trace_data, durations):
+        print_trace_step(step, show_reasoning=not no_reasoning, duration_ms=duration if not no_timing else None)
+
+
+# =============================================================================
+# Watch Command
+# =============================================================================
+
+@main.command()
+@click.argument("project_id")
+@click.option("--interval", "-i", default=1.0, help="Polling interval in seconds")
+@click.pass_context
+def watch(ctx, project_id: str, interval: float):
+    """Watch project progress in real-time.
+
+    Polls the API and displays new trace entries as they appear.
+    Use Ctrl+C to stop watching.
+    """
+    client = get_client(ctx.obj["api_url"])
+
+    # Check project exists
+    project = client.get_project(project_id)
+    if not project:
+        console.print(f"[red]Project not found: {project_id}[/]")
+        sys.exit(1)
+
+    console.print(Panel.fit(
+        f"[bold]Watching[/] {project_id}\n[dim]Press Ctrl+C to stop[/]",
+        border_style="dark_cyan",
+    ))
+
+    seen_steps = 0
+    last_status = None
+    last_timestamp = None
+
+    try:
+        while True:
+            # Get current trace
+            try:
+                trace_data = client.get_trace(project_id)
+                project = client.get_project(project_id)
+            except Exception as e:
+                console.print(f"[red]Error polling: {e}[/]")
+                time.sleep(interval)
+                continue
+
+            current_status = project.get("status") if project else None
+
+            # Print new steps with timing
+            if len(trace_data) > seen_steps:
+                for step in trace_data[seen_steps:]:
+                    duration_ms = None
+                    if last_timestamp:
+                        try:
+                            from datetime import datetime
+                            curr_ts = step.get("timestamp", "")
+                            prev_dt = datetime.fromisoformat(last_timestamp.replace("Z", "+00:00"))
+                            curr_dt = datetime.fromisoformat(curr_ts.replace("Z", "+00:00"))
+                            duration_ms = int((curr_dt - prev_dt).total_seconds() * 1000)
+                            if duration_ms < 0:
+                                duration_ms = 0
+                        except (ValueError, TypeError):
+                            pass
+                    print_trace_step(step, show_reasoning=True, duration_ms=duration_ms)
+                    last_timestamp = step.get("timestamp")
+                seen_steps = len(trace_data)
+
+            # Check if processing is complete
+            if current_status != last_status:
+                last_status = current_status
+                if current_status in ("complete", "failed"):
+                    console.print()
+                    if current_status == "complete":
+                        console.print("[dark_green]✓ Processing complete[/dark_green]")
+                    else:
+                        console.print("[red]✗ Processing failed[/red]")
+                    break
+
+            time.sleep(interval)
+
+    except KeyboardInterrupt:
+        console.print("\n[dim]Stopped watching.[/dim]")
 
 
 # =============================================================================
@@ -338,6 +628,29 @@ def trace(ctx, project_id: str):
 def kb():
     """Knowledge base management."""
     pass
+
+
+@kb.command("seed")
+def kb_seed():
+    """Seed knowledge base with demo data for NeuroLink Mini project."""
+    from .seed_demo_data import seed_demo_data
+    from .stores import OrgKnowledgeStore
+
+    console.print("[bold]Seeding knowledge base with demo data...[/bold]")
+    store = OrgKnowledgeStore()
+    stats = seed_demo_data(store)
+
+    console.print(f"\n[green]Seeded {stats['suppliers']} suppliers and {stats['parts']} parts[/green]")
+
+    # Show summary
+    console.print("\n[bold]Suppliers:[/bold]")
+    for s in store.list_suppliers():
+        console.print(f"  [cyan]{s.name}[/cyan] ({s.supplier_id}): {s.trust_level.value} trust, {len(s.notes)} notes")
+
+    console.print("\n[bold]Parts:[/bold]")
+    for p in store.list_parts():
+        status = "[red]BANNED[/red]" if p.banned else ("[green]preferred[/green]" if p.preferred else "")
+        console.print(f"  [cyan]{p.mpn}[/cyan]: {status} used {p.times_used}x, {len(p.notes)} notes")
 
 
 # -----------------------------------------------------------------------------

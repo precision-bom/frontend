@@ -4,7 +4,6 @@ Test Cases:
 - UP1: Upload BOM and process
 - UP2: Process creates trace entries
 - UP3: Line items have status
-- UP4: Re-process existing project
 - UP5: Upload with intake file
 - UP6: Upload minimal BOM
 
@@ -79,28 +78,6 @@ async def test_up3_line_items_have_status(client, sample_bom_csv, test_state):
     assert len(project["line_items"]) > 0
     for item in project["line_items"]:
         assert "status" in item
-
-
-@pytest.mark.asyncio
-async def test_up4_reprocess_existing_project(client, sample_bom_csv, test_state):
-    """UP4: Re-process existing project returns processing status."""
-    # First create a project
-    files = {"bom_file": ("test_bom.csv", sample_bom_csv, "text/csv")}
-    data = {"project_name": "Test Project UP4"}
-    create_response = await client.post("/projects", files=files, data=data)
-    project_id = create_response.json()["project_id"]
-    test_state.created_project_ids.append(project_id)
-
-    # Re-process the project
-    response = await client.post(f"/projects/{project_id}/process")
-
-    assert response.status_code == 200
-    result = response.json()
-
-    assert result["project_id"] == project_id
-    assert "status" in result
-    assert result["status"] in ["started", "processing"]
-    assert "message" in result
 
 
 @pytest.mark.asyncio

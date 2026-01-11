@@ -107,6 +107,7 @@ class BOMLineItem(BaseModel):
     engineering_decision: Optional[AgentDecision] = None
     sourcing_decision: Optional[AgentDecision] = None
     finance_decision: Optional[AgentDecision] = None
+    final_decision: Optional[AgentDecision] = None  # Aggregated decision from FinalDecisionAgent
     purchasing_decision: Optional[AgentDecision] = None
 
 

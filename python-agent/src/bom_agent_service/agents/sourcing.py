@@ -1,7 +1,9 @@
 """Sourcing review agent with batch processing."""
 
-import json
+import logging
+from typing import Literal, Optional
 from crewai import Agent, Task, Crew
+from pydantic import BaseModel, Field
 
 from ..models import (
     BOMLineItem,
@@ -11,12 +13,27 @@ from ..models import (
     RiskLevel,
 )
 from ..stores import OrgKnowledgeStore, OffersStore
-from .memory_config import (
-    get_llm,
-    build_org_knowledge_source,
-    build_project_knowledge_source,
-    SOURCING_POLICIES,
-)
+from .memory_config import get_llm
+
+logger = logging.getLogger(__name__)
+
+
+# Pydantic models for structured output
+class SourcingPartDecision(BaseModel):
+    """Decision for a single part from sourcing review."""
+    mpn: str = Field(description="The manufacturer part number")
+    decision: Literal["APPROVED", "REJECTED"] = Field(description="Whether sourcing is approved or rejected")
+    selected_supplier: Optional[str] = Field(default=None, description="The selected supplier ID")
+    selected_supplier_name: Optional[str] = Field(default=None, description="The selected supplier name")
+    unit_price: float = Field(default=0.0, description="Unit price from selected supplier")
+    lead_time_days: int = Field(default=0, description="Lead time in days")
+    risk_level: Literal["low", "medium", "high"] = Field(default="medium", description="Supply risk level")
+    reasoning: str = Field(description="Explanation for the sourcing decision")
+
+
+class SourcingBatchResult(BaseModel):
+    """Batch result from sourcing review."""
+    decisions: list[SourcingPartDecision] = Field(description="List of sourcing decisions for each part")
 
 
 class SourcingAgent:
@@ -26,7 +43,7 @@ class SourcingAgent:
     """
 
     def __init__(self, org_store: OrgKnowledgeStore):
-        """Initialize agent with LLM and cached knowledge sources."""
+        """Initialize agent with LLM. All context is pre-aggregated in prompts."""
         self.org_store = org_store
         self._llm = get_llm()
 
@@ -34,44 +51,56 @@ class SourcingAgent:
             role="Supply Chain Analyst",
             goal="Evaluate supply risk and select optimal suppliers",
             backstory="""You are an experienced supply chain analyst specializing in
-            electronics procurement. You have expertise in:
-            - Supplier evaluation and risk assessment
-            - Price negotiation and cost optimization
-            - Lead time analysis and delivery planning
-            - Multi-sourcing strategies
-            - Authorized vs broker sourcing decisions
-
-            Your job is to analyze available offers for each BOM item and recommend
-            the best sourcing option considering price, availability, risk, and
-            project constraints.""",
+            electronics procurement and supplier risk assessment.""",
             llm=self._llm,
             verbose=False,
             allow_delegation=False,
         )
 
-        # Cache static knowledge sources
-        self._policy_knowledge = SOURCING_POLICIES
-        self._org_knowledge = build_org_knowledge_source(org_store)
-
-    def evaluate_batch(
+    async def evaluate_batch(
         self,
         line_items: list[BOMLineItem],
         project_context: ProjectContext,
         offers_store: OffersStore,
     ) -> dict[str, AgentDecision]:
-        """Evaluate sourcing for all line items in a single LLM call.
+        """Evaluate sourcing for all line items in a single LLM call (async).
 
         Returns a dict mapping MPN to AgentDecision.
+        Raises ValueError if the LLM returns an invalid response.
         """
         if not line_items:
             return {}
 
-        # Build context for all parts
+        # Collect all unique suppliers across all parts first
+        supplier_ids_seen: set[str] = set()
+        suppliers_context: list[str] = []
+
+        for item in line_items:
+            mpns_to_check = [item.mpn] + item.approved_alternates
+            for mpn in mpns_to_check:
+                part_offers = offers_store.get_offers(mpn)
+                if part_offers:
+                    for offer in part_offers.offers:
+                        if offer.supplier_id not in supplier_ids_seen:
+                            supplier_ids_seen.add(offer.supplier_id)
+                            supplier = self.org_store.get_supplier(offer.supplier_id)
+                            if supplier:
+                                logger.info(f"[KNOWLEDGE] Attaching supplier knowledge for: {supplier.name} ({supplier.supplier_id})")
+                                supplier_ctx = self._build_supplier_context(supplier)
+                                suppliers_context.append(supplier_ctx)
+
+        # Build context for all parts (without repeating supplier details)
         parts_context = []
         for item in line_items:
             parts_context.append(self._build_part_context(item, project_context, offers_store))
 
         all_parts_text = "\n\n---\n\n".join(parts_context)
+        mpn_list = [item.mpn for item in line_items]
+
+        # Build supplier knowledge section (once for all unique suppliers)
+        suppliers_section = ""
+        if suppliers_context:
+            suppliers_section = "## Known Supplier Information\n\n" + "\n\n".join(suppliers_context) + "\n\n---\n\n"
 
         task = Task(
             description=f"""Analyze sourcing options for ALL of the following BOM line items.
@@ -85,7 +114,7 @@ class SourcingAgent:
 
 ---
 
-## LINE ITEMS TO SOURCE
+{suppliers_section}## LINE ITEMS TO SOURCE
 
 {all_parts_text}
 
@@ -100,44 +129,70 @@ For EACH part, evaluate:
 
 Select the best offer for each part.
 
-Respond with a JSON array containing one object per part:
-```json
-[
-  {{
-    "mpn": "PART-NUMBER-1",
-    "decision": "APPROVED" or "REJECTED",
-    "selected_supplier": "supplier_id",
-    "selected_supplier_name": "supplier name",
-    "unit_price": 0.00,
-    "lead_time_days": 0,
-    "risk_level": "low" or "medium" or "high",
-    "reasoning": "brief explanation"
-  }},
-  ...
-]
-```
-
-Return ONLY the JSON array, no other text.""",
-            expected_output="JSON array with sourcing decision for each part",
+You MUST provide a decision for every part listed: {', '.join(mpn_list)}""",
+            expected_output="Structured sourcing decisions for each part with supplier selection and reasoning",
             agent=self.agent,
+            output_pydantic=SourcingBatchResult,
         )
 
-        # Build knowledge sources
-        project_knowledge = build_project_knowledge_source(project_context)
-        knowledge_sources = [self._policy_knowledge, project_knowledge]
-        if self._org_knowledge:
-            knowledge_sources.append(self._org_knowledge)
-
+        # No knowledge_sources - all context is pre-aggregated in the task description
         crew = Crew(
             agents=[self.agent],
             tasks=[task],
             verbose=False,
-            knowledge_sources=knowledge_sources,
         )
 
-        result = crew.kickoff()
+        result = await crew.kickoff_async()
 
-        return self._parse_batch_result(result.raw, [item.mpn for item in line_items])
+        # Access the structured pydantic output
+        if not result.pydantic:
+            raise ValueError(f"SourcingAgent: LLM did not return structured output. Raw: {result.raw[:500] if result.raw else 'EMPTY'}")
+
+        batch_result: SourcingBatchResult = result.pydantic
+
+        # Convert to AgentDecision dict
+        decisions = {}
+        for part_decision in batch_result.decisions:
+            status = DecisionStatus.APPROVED if part_decision.decision == "APPROVED" else DecisionStatus.REJECTED
+            risk_level = RiskLevel(part_decision.risk_level)
+
+            decisions[part_decision.mpn] = AgentDecision(
+                agent_name="SourcingAgent",
+                status=status,
+                reasoning=part_decision.reasoning,
+                output_data={
+                    "selected_mpn": part_decision.mpn,
+                    "selected_supplier": part_decision.selected_supplier,
+                    "selected_supplier_name": part_decision.selected_supplier_name,
+                    "unit_price": part_decision.unit_price,
+                    "lead_time_days": part_decision.lead_time_days,
+                    "risk_level": risk_level.value,
+                },
+                references=[],
+            )
+
+        # Verify all MPNs have decisions
+        missing_mpns = set(mpn_list) - set(decisions.keys())
+        if missing_mpns:
+            raise ValueError(f"SourcingAgent: Missing decisions for MPNs: {missing_mpns}")
+
+        return decisions
+
+    def _build_supplier_context(self, supplier) -> str:
+        """Build context string for a supplier (included once per unique supplier)."""
+        lines = [
+            f"### {supplier.name} (ID: {supplier.supplier_id})",
+            f"- Type: {supplier.supplier_type.value}",
+            f"- Trust Level: {supplier.trust_level.value}",
+            f"- On-time Rate: {supplier.on_time_rate:.0%}",
+            f"- Quality Rate: {supplier.quality_rate:.0%}",
+            f"- Payment Terms: {supplier.payment_terms}",
+        ]
+
+        if supplier.notes:
+            lines.append(f"- Notes: {'; '.join(supplier.notes)}")
+
+        return "\n".join(lines)
 
     def _build_part_context(
         self,
@@ -162,14 +217,13 @@ Return ONLY the JSON array, no other text.""",
             part_offers = offers_store.get_offers(mpn)
             if part_offers:
                 for offer in part_offers.offers:
-                    supplier = self.org_store.get_supplier(offer.supplier_id)
                     price_at_qty = offer.get_price_at_qty(line_item.quantity)
+                    # Supplier details are now in the top section, just reference by ID
                     lines.append(
                         f"  {offer_num}. {offer.supplier_name} (ID: {offer.supplier_id}): "
                         f"${price_at_qty:.4f}/unit, stock: {offer.stock_qty}, "
                         f"lead: {offer.lead_time_days}d, "
-                        f"authorized: {offer.is_authorized}, "
-                        f"trust: {supplier.trust_level.value if supplier else 'unknown'}"
+                        f"authorized: {offer.is_authorized}"
                     )
                     offer_num += 1
 
@@ -177,51 +231,3 @@ Return ONLY the JSON array, no other text.""",
             lines.append("  NO OFFERS AVAILABLE")
 
         return "\n".join(lines)
-
-    def _parse_batch_result(self, raw_result: str, mpns: list[str]) -> dict[str, AgentDecision]:
-        """Parse batch result into dict of decisions."""
-        decisions = {}
-
-        try:
-            start = raw_result.find("[")
-            end = raw_result.rfind("]") + 1
-            if start >= 0 and end > start:
-                data = json.loads(raw_result[start:end])
-
-                for item in data:
-                    mpn = item.get("mpn", "")
-                    decision_str = item.get("decision", "APPROVED").upper()
-                    status = DecisionStatus.APPROVED if decision_str == "APPROVED" else DecisionStatus.REJECTED
-
-                    risk_str = item.get("risk_level", "medium").lower()
-                    risk_level = RiskLevel(risk_str) if risk_str in ["low", "medium", "high"] else RiskLevel.MEDIUM
-
-                    decisions[mpn] = AgentDecision(
-                        agent_name="SourcingAgent",
-                        status=status,
-                        reasoning=item.get("reasoning", ""),
-                        output_data={
-                            "selected_mpn": mpn,
-                            "selected_supplier": item.get("selected_supplier"),
-                            "selected_supplier_name": item.get("selected_supplier_name"),
-                            "unit_price": item.get("unit_price", 0.0),
-                            "lead_time_days": item.get("lead_time_days", 0),
-                            "risk_level": risk_level.value,
-                        },
-                        references=[],
-                    )
-        except json.JSONDecodeError:
-            pass
-
-        # Fill in any missing MPNs with rejection
-        for mpn in mpns:
-            if mpn not in decisions:
-                decisions[mpn] = AgentDecision(
-                    agent_name="SourcingAgent",
-                    status=DecisionStatus.REJECTED,
-                    reasoning="Could not parse sourcing result",
-                    output_data={},
-                    references=[],
-                )
-
-        return decisions

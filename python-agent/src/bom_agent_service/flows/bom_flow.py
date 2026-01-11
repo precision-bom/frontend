@@ -1,8 +1,7 @@
-"""BOM Processing Flow using CrewAI with batch processing."""
+"""BOM Processing Flow using CrewAI with parallel agent execution."""
 
+import asyncio
 import csv
-from datetime import datetime
-from pathlib import Path
 from typing import Optional, Callable
 import yaml
 
@@ -21,11 +20,12 @@ from ..models import (
     EngineeringContext,
     PreferredManufacturers,
     ProductType,
+    AgentDecision,
 )
 from ..stores import ProjectStore, OffersStore, OrgKnowledgeStore
 from ..stores.offers_store import create_mock_offers
 from ..stores.org_knowledge import seed_default_suppliers
-from ..agents import EngineeringAgent, SourcingAgent, FinanceAgent
+from ..agents import EngineeringAgent, SourcingAgent, FinanceAgent, FinalDecisionAgent
 
 
 class BOMFlowState(BaseModel):
@@ -37,7 +37,7 @@ class BOMFlowState(BaseModel):
 
 
 class BOMProcessingFlow(Flow[BOMFlowState]):
-    """Flow for processing a BOM through all stages with batch processing."""
+    """Flow for processing a BOM with parallel agent execution."""
 
     def __init__(
         self,
@@ -46,6 +46,7 @@ class BOMProcessingFlow(Flow[BOMFlowState]):
         engineering_agent: EngineeringAgent,
         sourcing_agent: SourcingAgent,
         finance_agent: FinanceAgent,
+        final_decision_agent: FinalDecisionAgent,
         on_step: Optional[Callable[[FlowTraceStep], None]] = None,
     ):
         super().__init__()
@@ -59,6 +60,12 @@ class BOMProcessingFlow(Flow[BOMFlowState]):
         self._engineering_agent = engineering_agent
         self._sourcing_agent = sourcing_agent
         self._finance_agent = finance_agent
+        self._final_decision_agent = final_decision_agent
+
+        # Store agent decisions for aggregation
+        self._engineering_decisions: dict[str, AgentDecision] = {}
+        self._sourcing_decisions: dict[str, AgentDecision] = {}
+        self._finance_decisions: dict[str, AgentDecision] = {}
 
     def _log_step(self, step: str, message: str, agent: str = None, reasoning: str = None, references: list[str] = None):
         """Log a step and notify callback."""
@@ -120,172 +127,171 @@ class BOMProcessingFlow(Flow[BOMFlowState]):
             enriched += 1
 
         self.project_store.update_project(self._project)
-        self._log_step("enrich", f"Enriched {enriched}/{len(self._project.line_items)} items with mock data")
+        self._log_step("enrich", f"Enriched {enriched}/{len(self._project.line_items)} items with supplier data")
 
         return self.state
 
     @listen(enrich)
-    def engineering_review(self):
-        """Run engineering review on all line items in a single batch."""
+    async def parallel_agent_review(self):
+        """Run Engineering, Sourcing, and Finance agents in parallel using asyncio."""
+        import time
         if self.state.error:
             return self.state
 
-        self._log_step("engineering", "Starting engineering review (batch)")
+        start_time = time.time()
+        self._log_step("parallel_review", "Starting parallel agent review (Engineering, Sourcing, Finance)")
 
         self._project = self.project_store.get_project(self.state.project_id)
-        self._project.status = "engineering_review"
+        self._project.status = "agent_review"
 
-        # Get items to evaluate
+        # Get all enriched items
         items_to_evaluate = [
             item for item in self._project.line_items
             if item.status == LineItemStatus.ENRICHED
         ]
 
         if not items_to_evaluate:
-            self._log_step("engineering", "No items to evaluate")
+            self._log_step("parallel_review", "No items to evaluate")
             return self.state
 
-        # Batch evaluate all items in a single LLM call
-        decisions = self._engineering_agent.evaluate_batch(
-            items_to_evaluate,
-            self._project.context,
-            self.offers_store,
+        # Run all three agents in parallel using asyncio.gather
+        (
+            self._engineering_decisions,
+            self._sourcing_decisions,
+            self._finance_decisions,
+        ) = await asyncio.gather(
+            self._engineering_agent.evaluate_batch(
+                items_to_evaluate,
+                self._project.context,
+                self.offers_store,
+            ),
+            self._sourcing_agent.evaluate_batch(
+                items_to_evaluate,
+                self._project.context,
+                self.offers_store,
+            ),
+            self._finance_agent.evaluate_batch(
+                items_to_evaluate,
+                self._project.context,
+                self.offers_store,
+            ),
         )
 
-        # Apply decisions to items
-        approved = 0
+        parallel_time = time.time() - start_time
+        self._log_step("parallel_review", f"Parallel LLM calls completed in {parallel_time:.1f}s")
+
+        # Log each agent's decisions with full reasoning
+        self._log_agent_decisions("engineering", self._engineering_decisions, items_to_evaluate)
+        self._log_agent_decisions("sourcing", self._sourcing_decisions, items_to_evaluate)
+        self._log_agent_decisions("finance", self._finance_decisions, items_to_evaluate)
+
+        # Store decisions on line items for reference
         for item in items_to_evaluate:
+            item.engineering_decision = self._engineering_decisions.get(item.mpn)
+            item.sourcing_decision = self._sourcing_decisions.get(item.mpn)
+            item.finance_decision = self._finance_decisions.get(item.mpn)
+            item.status = LineItemStatus.PENDING_FINAL_DECISION
+
+        self.project_store.update_project(self._project)
+
+        eng_approved = sum(1 for d in self._engineering_decisions.values() if d.status == DecisionStatus.APPROVED)
+        src_approved = sum(1 for d in self._sourcing_decisions.values() if d.status == DecisionStatus.APPROVED)
+        fin_approved = sum(1 for d in self._finance_decisions.values() if d.status == DecisionStatus.APPROVED)
+
+        self._log_step(
+            "parallel_review",
+            f"Parallel review complete: Engineering {eng_approved}/{len(items_to_evaluate)} approved, "
+            f"Sourcing {src_approved}/{len(items_to_evaluate)} approved, "
+            f"Finance {fin_approved}/{len(items_to_evaluate)} approved"
+        )
+
+        return self.state
+
+    def _log_agent_decisions(self, agent_type: str, decisions: dict[str, AgentDecision], items: list[BOMLineItem]):
+        """Log each decision from an agent with full reasoning."""
+        agent_name = f"{agent_type.title()}Agent"
+        for item in items:
             decision = decisions.get(item.mpn)
             if decision:
-                item.engineering_decision = decision
-                if decision.status == DecisionStatus.APPROVED:
-                    item.approved_alternates = decision.output_data.get("approved_alternates", [])
-                    item.status = LineItemStatus.PENDING_SOURCING
-                    approved += 1
-                else:
-                    item.status = LineItemStatus.FAILED
-
+                # Log the full reasoning, not truncated
                 self._log_step(
-                    "engineering",
+                    agent_type,
                     f"{item.mpn}: {decision.status.value}",
-                    agent="EngineeringAgent",
-                    reasoning=decision.reasoning[:200] if decision.reasoning else None,
+                    agent=agent_name,
+                    reasoning=decision.reasoning,  # Full reasoning, no truncation
                 )
 
-        self.project_store.update_project(self._project)
-        self._log_step("engineering", f"Engineering review complete: {approved}/{len(items_to_evaluate)} approved")
-
-        return self.state
-
-    @listen(engineering_review)
-    def sourcing_review(self):
-        """Run sourcing review on approved items in a single batch."""
+    @listen(parallel_agent_review)
+    async def final_decision(self):
+        """Run Final Decision Agent to aggregate all inputs and make final decisions."""
+        import time
         if self.state.error:
             return self.state
 
-        self._log_step("sourcing", "Starting sourcing review (batch)")
+        start_time = time.time()
+        self._log_step("final_decision", "Starting final decision aggregation")
 
         self._project = self.project_store.get_project(self.state.project_id)
-        self._project.status = "sourcing_review"
+        self._project.status = "final_decision"
 
-        # Get items to evaluate
-        items_to_evaluate = [
+        # Get items pending final decision
+        items_to_decide = [
             item for item in self._project.line_items
-            if item.status == LineItemStatus.PENDING_SOURCING
+            if item.status == LineItemStatus.PENDING_FINAL_DECISION
         ]
 
-        if not items_to_evaluate:
-            self._log_step("sourcing", "No items to evaluate")
+        if not items_to_decide:
+            self._log_step("final_decision", "No items pending final decision")
             return self.state
 
-        # Batch evaluate all items in a single LLM call
-        decisions = self._sourcing_agent.evaluate_batch(
-            items_to_evaluate,
+        # Run final decision agent
+        final_decisions = await self._final_decision_agent.make_final_decisions(
+            items_to_decide,
             self._project.context,
-            self.offers_store,
+            self._engineering_decisions,
+            self._sourcing_decisions,
+            self._finance_decisions,
         )
+        final_time = time.time() - start_time
+        self._log_step("final_decision", f"Final decision LLM call completed in {final_time:.1f}s")
 
-        # Apply decisions to items
-        approved = 0
-        for item in items_to_evaluate:
-            decision = decisions.get(item.mpn)
-            if decision:
-                item.sourcing_decision = decision
-                if decision.status == DecisionStatus.APPROVED:
-                    item.selected_mpn = decision.output_data.get("selected_mpn", item.mpn)
-                    item.selected_supplier = decision.output_data.get("selected_supplier")
-                    item.status = LineItemStatus.PENDING_FINANCE
-                    approved += 1
-                else:
-                    item.status = LineItemStatus.FAILED
-
-                self._log_step(
-                    "sourcing",
-                    f"{item.mpn}: {decision.status.value} - {decision.output_data.get('selected_supplier_name', 'N/A')}",
-                    agent="SourcingAgent",
-                    reasoning=decision.reasoning[:200] if decision.reasoning else None,
-                )
-
-        self.project_store.update_project(self._project)
-        self._log_step("sourcing", f"Sourcing review complete: {approved} suppliers selected")
-
-        return self.state
-
-    @listen(sourcing_review)
-    def finance_review(self):
-        """Run finance review on sourced items in a single batch."""
-        if self.state.error:
-            return self.state
-
-        self._log_step("finance", "Starting finance review (batch)")
-
-        self._project = self.project_store.get_project(self.state.project_id)
-        self._project.status = "finance_review"
-
-        # Get items to evaluate
-        items_to_evaluate = [
-            item for item in self._project.line_items
-            if item.status == LineItemStatus.PENDING_FINANCE
-        ]
-
-        if not items_to_evaluate:
-            self._log_step("finance", "No items to evaluate")
-            return self.state
-
-        # Batch evaluate all items in a single LLM call
-        decisions = self._finance_agent.evaluate_batch(
-            items_to_evaluate,
-            self._project.context,
-            self.offers_store,
-        )
-
-        # Apply decisions to items
+        # Apply final decisions
         approved = 0
         total_spend = 0.0
-        for item in items_to_evaluate:
-            decision = decisions.get(item.mpn)
+        for item in items_to_decide:
+            decision = final_decisions.get(item.mpn)
             if decision:
-                item.finance_decision = decision
+                item.final_decision = decision
+
                 if decision.status == DecisionStatus.APPROVED:
+                    item.selected_mpn = item.mpn  # Could be alternate in future
+                    item.selected_supplier = decision.output_data.get("selected_supplier_id")
                     item.status = LineItemStatus.PENDING_PURCHASE
-                    total_spend += decision.output_data.get("approved_spend", 0.0)
+                    total_spend += decision.output_data.get("final_line_cost", 0.0)
                     approved += 1
                 else:
                     item.status = LineItemStatus.FAILED
 
+                # Log with full reasoning
                 self._log_step(
-                    "finance",
-                    f"{item.mpn}: {decision.status.value} - ${decision.output_data.get('approved_spend', 0):.2f}",
-                    agent="FinanceAgent",
-                    reasoning=decision.reasoning[:200] if decision.reasoning else None,
+                    "final_decision",
+                    f"{item.mpn}: {decision.status.value} - "
+                    f"Supplier: {decision.output_data.get('selected_supplier_name', 'N/A')}, "
+                    f"Qty: {decision.output_data.get('final_quantity', 0)}, "
+                    f"Cost: ${decision.output_data.get('final_line_cost', 0):.2f}",
+                    agent="FinalDecisionAgent",
+                    reasoning=decision.reasoning,  # Full comprehensive rationale
                 )
 
         self.project_store.update_project(self._project)
-        self._log_step("finance", f"Finance review complete: ${total_spend:.2f} total approved")
+        self._log_step(
+            "final_decision",
+            f"Final decisions complete: {approved}/{len(items_to_decide)} approved, ${total_spend:,.2f} total spend"
+        )
 
         return self.state
 
-    @listen(finance_review)
+    @listen(final_decision)
     def complete(self):
         """Mark project as complete."""
         if self.state.error:
@@ -369,12 +375,13 @@ class BOMProcessingFlow(Flow[BOMFlowState]):
 _engineering_agent: Optional[EngineeringAgent] = None
 _sourcing_agent: Optional[SourcingAgent] = None
 _finance_agent: Optional[FinanceAgent] = None
+_final_decision_agent: Optional[FinalDecisionAgent] = None
 _org_store: Optional[OrgKnowledgeStore] = None
 
 
 def initialize_agents(data_dir: str = "data"):
     """Initialize agents at startup. Call this once when server starts."""
-    global _engineering_agent, _sourcing_agent, _finance_agent, _org_store
+    global _engineering_agent, _sourcing_agent, _finance_agent, _final_decision_agent, _org_store
 
     print("Initializing BOM processing agents...")
 
@@ -384,15 +391,17 @@ def initialize_agents(data_dir: str = "data"):
     _engineering_agent = EngineeringAgent(_org_store)
     _sourcing_agent = SourcingAgent(_org_store)
     _finance_agent = FinanceAgent()
+    _final_decision_agent = FinalDecisionAgent()
 
     print(f"Agents initialized with model: {_engineering_agent._llm.model}")
+    print("Flow: Intake → Enrich → [Engineering | Sourcing | Finance] (parallel) → Final Decision → Complete")
 
 
 def get_agents():
-    """Get initialized agents. Returns (engineering, sourcing, finance, org_store)."""
+    """Get initialized agents. Returns (engineering, sourcing, finance, final_decision, org_store)."""
     if _engineering_agent is None:
         raise RuntimeError("Agents not initialized. Call initialize_agents() first.")
-    return _engineering_agent, _sourcing_agent, _finance_agent, _org_store
+    return _engineering_agent, _sourcing_agent, _finance_agent, _final_decision_agent, _org_store
 
 
 async def run_flow_async(
@@ -402,7 +411,7 @@ async def run_flow_async(
     on_step: Optional[Callable[[FlowTraceStep], None]] = None,
 ) -> Project:
     """Run the BOM processing flow asynchronously."""
-    global _engineering_agent, _sourcing_agent, _finance_agent, _org_store
+    global _engineering_agent, _sourcing_agent, _finance_agent, _final_decision_agent, _org_store
 
     if _engineering_agent is None:
         initialize_agents(data_dir)
@@ -415,6 +424,7 @@ async def run_flow_async(
         _engineering_agent,
         _sourcing_agent,
         _finance_agent,
+        _final_decision_agent,
         on_step=on_step,
     )
     flow.state.bom_path = bom_path

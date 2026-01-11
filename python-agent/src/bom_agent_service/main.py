@@ -1,11 +1,19 @@
 """FastAPI server for BOM Agent Service."""
 
+import logging
 import time
 import uuid
 from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    datefmt="%H:%M:%S",
+)
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 

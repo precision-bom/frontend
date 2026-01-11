@@ -18,6 +18,7 @@ dependencies = [
 [project.scripts]
 sourcing = "bom_agent_service.cli:main"
 sourcing-server = "bom_agent_service.server:main"
+sourcing-demo = "bom_agent_service.demo:main"
 
 [build-system]
 requires = ["hatchling"]

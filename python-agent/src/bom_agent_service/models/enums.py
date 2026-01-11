@@ -47,6 +47,7 @@ class LineItemStatus(str, Enum):
     PENDING_ENGINEERING = "pending_engineering"
     PENDING_SOURCING = "pending_sourcing"
     PENDING_FINANCE = "pending_finance"
+    PENDING_FINAL_DECISION = "pending_final_decision"
     PENDING_PURCHASE = "pending_purchase"
     ORDERED = "ordered"
     RECEIVED = "received"

@@ -2,28 +2,82 @@
 
 import csv
 import tempfile
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Optional
 from io import StringIO
 
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel, Field
+from rich.console import Console
+from rich.panel import Panel
+from rich.text import Text
 
 from ..models import (
     ProjectContext,
     BOMLineItem,
-    Project,
-    FlowTraceStep,
     ComplianceRequirements,
     SourcingConstraints,
     EngineeringContext,
-    PreferredManufacturers,
     ProductType,
+    FlowTraceStep,
 )
 from ..stores import ProjectStore, OrgKnowledgeStore
 from ..stores.org_knowledge import seed_default_suppliers
-from ..flows import run_flow, run_flow_async
+from ..flows import run_flow_async
+
+# Rich console for formatted output
+console = Console()
+
+# Agent colors for visual distinction (light-background friendly)
+AGENT_COLORS = {
+    "EngineeringAgent": "dark_cyan",
+    "SourcingAgent": "dark_green",
+    "FinanceAgent": "dark_orange",
+    "FinalDecisionAgent": "dark_magenta",
+}
+
+STEP_ICONS = {
+    "intake": "📥",
+    "enrich": "🔍",
+    "parallel_review": "⚡",
+    "engineering": "🔧",
+    "sourcing": "📦",
+    "finance": "💰",
+    "final_decision": "⚖️",
+    "complete": "✅",
+}
+
+
+def log_flow_step(step: FlowTraceStep) -> None:
+    """Log a flow step with reasoning to the console using Rich formatting."""
+    timestamp = datetime.now().strftime("%H:%M:%S")
+    icon = STEP_ICONS.get(step.step, "•")
+
+    # Build the header line
+    if step.agent:
+        agent_color = AGENT_COLORS.get(step.agent, "default")
+        header = Text()
+        header.append(f"{timestamp} ", style="dim")
+        header.append(f"{icon} ", style="bold")
+        header.append(f"[{step.step}] ", style="bold blue")
+        header.append(f"[{step.agent}] ", style=f"bold {agent_color}")
+        header.append(step.message, style="default")
+        console.print(header)
+    else:
+        header = Text()
+        header.append(f"{timestamp} ", style="dim")
+        header.append(f"{icon} ", style="bold")
+        header.append(f"[{step.step}] ", style="bold blue")
+        header.append(step.message, style="default")
+        console.print(header)
+
+    # Show reasoning in a subtle indented format
+    if step.reasoning:
+        reasoning_text = Text()
+        reasoning_text.append("         └─ ", style="dim")
+        reasoning_text.append(step.reasoning, style="italic dark_cyan")
+        console.print(reasoning_text)
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -223,57 +277,8 @@ async def create_project(
     )
 
 
-# Processing state tracking
-_processing_status: dict[str, str] = {}
-
-
-def _run_flow_background(project_id: str, bom_path: str, intake_path: Optional[str]):
-    """Run the flow in background."""
-    try:
-        _processing_status[project_id] = "processing"
-        run_flow(
-            bom_path=bom_path,
-            intake_path=intake_path,
-            data_dir=DATA_DIR,
-        )
-        _processing_status[project_id] = "complete"
-    except Exception as e:
-        _processing_status[project_id] = f"error: {str(e)}"
-
-
-@router.post("/{project_id}/process", response_model=ProcessResponse)
-async def process_project(project_id: str, background_tasks: BackgroundTasks):
-    """Process a project through the agent flow.
-
-    Note: For existing projects, this re-runs the flow.
-    For new uploads, use the /projects/upload-and-process endpoint.
-    """
-    store = get_project_store()
-    project = store.get_project(project_id)
-
-    if not project:
-        raise HTTPException(status_code=404, detail=f"Project not found: {project_id}")
-
-    # Check if already processing
-    if _processing_status.get(project_id) == "processing":
-        return ProcessResponse(
-            project_id=project_id,
-            status="processing",
-            message="Project is already being processed",
-        )
-
-    _processing_status[project_id] = "processing"
-
-    return ProcessResponse(
-        project_id=project_id,
-        status="started",
-        message="Processing started. Poll GET /projects/{id} for status.",
-    )
-
-
 @router.post("/upload-and-process", response_model=ProcessResponse)
 async def upload_and_process(
-    background_tasks: BackgroundTasks,
     bom_file: UploadFile = File(...),
     intake_file: Optional[UploadFile] = File(None),
 ):
@@ -293,12 +298,13 @@ async def upload_and_process(
             f.write(intake_content)
             intake_path = f.name
 
-    # Run flow asynchronously
+    # Run flow asynchronously with logging callback
     try:
         project = await run_flow_async(
             bom_path=bom_path,
             intake_path=intake_path,
             data_dir=DATA_DIR,
+            on_step=log_flow_step,
         )
 
         return ProcessResponse(

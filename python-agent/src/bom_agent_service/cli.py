@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """CLI tool for BOM Agent Service - uses API endpoints."""
 
+import os
 import sys
 import time
 from pathlib import Path
@@ -17,6 +18,7 @@ from rich import box
 
 console = Console()
 DEFAULT_API_URL = "http://localhost:8000"
+DEFAULT_API_KEY = os.environ.get("SERVICE_API_KEY", "")
 
 # Agent colors for visual distinction (light-background friendly)
 AGENT_COLORS = {
@@ -41,9 +43,13 @@ STEP_ICONS = {
 class APIClient:
     """HTTP client for BOM Agent Service API."""
 
-    def __init__(self, base_url: str = DEFAULT_API_URL):
+    def __init__(self, base_url: str = DEFAULT_API_URL, api_key: str = None):
         self.base_url = base_url.rstrip("/")
-        self.client = httpx.Client(timeout=300.0)  # Long timeout for processing
+        self.api_key = api_key or DEFAULT_API_KEY
+        headers = {}
+        if self.api_key:
+            headers["X-API-Key"] = self.api_key
+        self.client = httpx.Client(timeout=300.0, headers=headers)  # Long timeout for processing
 
     def health_check(self) -> bool:
         """Check if API is healthy."""
@@ -151,9 +157,9 @@ class APIClient:
         return resp.json()
 
 
-def get_client(url: str) -> APIClient:
+def get_client(url: str, api_key: str = None) -> APIClient:
     """Get API client, checking health first."""
-    client = APIClient(url)
+    client = APIClient(url, api_key=api_key)
     if not client.health_check():
         console.print(f"[red]API not available at {url}[/]")
         console.print("[dim]Start the service with: uv run uvicorn bom_agent_service.main:app --reload[/]")
@@ -223,12 +229,14 @@ def calculate_step_durations(trace_data: list[dict]) -> list[int]:
 
 @click.group()
 @click.option("--api-url", envvar="BOM_API_URL", default=DEFAULT_API_URL, help="API base URL")
+@click.option("--api-key", envvar="SERVICE_API_KEY", default=DEFAULT_API_KEY, help="API key for authentication")
 @click.version_option(version="0.1.0")
 @click.pass_context
-def main(ctx, api_url: str):
+def main(ctx, api_url: str, api_key: str):
     """BOM Agent Service CLI - Process BOMs through multi-agent review."""
     ctx.ensure_object(dict)
     ctx.obj["api_url"] = api_url
+    ctx.obj["api_key"] = api_key
 
 
 # =============================================================================
@@ -254,7 +262,7 @@ def process(ctx, bom: str, intake: str | None, watch: bool, verbose: bool):
         border_style="dark_cyan",
     ))
 
-    client = get_client(ctx.obj["api_url"])
+    client = get_client(ctx.obj["api_url"], ctx.obj.get("api_key"))
 
     console.print(f"\n[bold]BOM:[/] {bom}")
     if intake:
@@ -443,7 +451,7 @@ def status(ctx, project_id: str | None):
 
     If PROJECT_ID is omitted, lists all projects.
     """
-    client = get_client(ctx.obj["api_url"])
+    client = get_client(ctx.obj["api_url"], ctx.obj.get("api_key"))
 
     if project_id:
         project = client.get_project(project_id)
@@ -513,7 +521,7 @@ def status(ctx, project_id: str | None):
 @click.pass_context
 def trace(ctx, project_id: str, no_reasoning: bool, no_timing: bool):
     """Show project execution trace with agent reasoning and timing."""
-    client = get_client(ctx.obj["api_url"])
+    client = get_client(ctx.obj["api_url"], ctx.obj.get("api_key"))
 
     try:
         trace_data = client.get_trace(project_id)
@@ -554,7 +562,7 @@ def watch(ctx, project_id: str, interval: float):
     Polls the API and displays new trace entries as they appear.
     Use Ctrl+C to stop watching.
     """
-    client = get_client(ctx.obj["api_url"])
+    client = get_client(ctx.obj["api_url"], ctx.obj.get("api_key"))
 
     # Check project exists
     project = client.get_project(project_id)
@@ -667,7 +675,7 @@ def parts():
 @click.pass_context
 def parts_list(ctx):
     """List all parts in knowledge base."""
-    client = get_client(ctx.obj["api_url"])
+    client = get_client(ctx.obj["api_url"], ctx.obj.get("api_key"))
     parts_data = client.list_parts()
 
     if not parts_data:
@@ -702,7 +710,7 @@ def parts_list(ctx):
 @click.pass_context
 def parts_show(ctx, mpn: str):
     """Show details for a specific part."""
-    client = get_client(ctx.obj["api_url"])
+    client = get_client(ctx.obj["api_url"], ctx.obj.get("api_key"))
     part = client.get_part(mpn)
 
     if not part:
@@ -732,7 +740,7 @@ def parts_show(ctx, mpn: str):
 @click.pass_context
 def parts_ban(ctx, mpn: str, reason: str):
     """Ban a part from use."""
-    client = get_client(ctx.obj["api_url"])
+    client = get_client(ctx.obj["api_url"], ctx.obj.get("api_key"))
     client.ban_part(mpn, reason)
     console.print(f"[green]Banned part: {mpn}[/]")
 
@@ -742,7 +750,7 @@ def parts_ban(ctx, mpn: str, reason: str):
 @click.pass_context
 def parts_unban(ctx, mpn: str):
     """Remove ban from a part."""
-    client = get_client(ctx.obj["api_url"])
+    client = get_client(ctx.obj["api_url"], ctx.obj.get("api_key"))
     client.unban_part(mpn)
     console.print(f"[green]Unbanned part: {mpn}[/]")
 
@@ -754,7 +762,7 @@ def parts_unban(ctx, mpn: str):
 @click.pass_context
 def parts_alternate(ctx, mpn: str, alt_mpn: str, reason: str):
     """Add an approved alternate for a part."""
-    client = get_client(ctx.obj["api_url"])
+    client = get_client(ctx.obj["api_url"], ctx.obj.get("api_key"))
     client.add_alternate(mpn, alt_mpn, reason)
     console.print(f"[green]Added alternate {alt_mpn} for {mpn}[/]")
 
@@ -773,7 +781,7 @@ def suppliers():
 @click.pass_context
 def suppliers_list(ctx):
     """List all suppliers in knowledge base."""
-    client = get_client(ctx.obj["api_url"])
+    client = get_client(ctx.obj["api_url"], ctx.obj.get("api_key"))
     suppliers_data = client.list_suppliers()
 
     if not suppliers_data:
@@ -806,7 +814,7 @@ def suppliers_list(ctx):
 @click.pass_context
 def suppliers_show(ctx, supplier_id: str):
     """Show details for a specific supplier."""
-    client = get_client(ctx.obj["api_url"])
+    client = get_client(ctx.obj["api_url"], ctx.obj.get("api_key"))
     supplier = client.get_supplier(supplier_id)
 
     if not supplier:
@@ -835,7 +843,7 @@ def suppliers_show(ctx, supplier_id: str):
 @click.pass_context
 def suppliers_trust(ctx, supplier_id: str, level: str, reason: str):
     """Set supplier trust level."""
-    client = get_client(ctx.obj["api_url"])
+    client = get_client(ctx.obj["api_url"], ctx.obj.get("api_key"))
     client.set_supplier_trust(supplier_id, level, reason)
     console.print(f"[green]Set trust level for {supplier_id} to {level}[/]")
 

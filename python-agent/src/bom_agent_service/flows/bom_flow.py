@@ -22,10 +22,13 @@ from ..models import (
     ProductType,
     AgentDecision,
 )
+from ..models.market_intel import MarketIntelReport
 from ..stores import ProjectStore, OffersStore, OrgKnowledgeStore
 from ..stores.offers_store import create_mock_offers
 from ..stores.org_knowledge import seed_default_suppliers
-from ..agents import EngineeringAgent, SourcingAgent, FinanceAgent, FinalDecisionAgent
+from ..stores.market_intel_store import MarketIntelStore
+from ..agents import EngineeringAgent, SourcingAgent, FinanceAgent, FinalDecisionAgent, MarketIntelAgent
+from ..services.apify_client import ApifyClient
 
 
 class BOMFlowState(BaseModel):
@@ -47,6 +50,7 @@ class BOMProcessingFlow(Flow[BOMFlowState]):
         sourcing_agent: SourcingAgent,
         finance_agent: FinanceAgent,
         final_decision_agent: FinalDecisionAgent,
+        market_intel_agent: Optional[MarketIntelAgent] = None,
         on_step: Optional[Callable[[FlowTraceStep], None]] = None,
     ):
         super().__init__()
@@ -61,11 +65,15 @@ class BOMProcessingFlow(Flow[BOMFlowState]):
         self._sourcing_agent = sourcing_agent
         self._finance_agent = finance_agent
         self._final_decision_agent = final_decision_agent
+        self._market_intel_agent = market_intel_agent
 
         # Store agent decisions for aggregation
         self._engineering_decisions: dict[str, AgentDecision] = {}
         self._sourcing_decisions: dict[str, AgentDecision] = {}
         self._finance_decisions: dict[str, AgentDecision] = {}
+
+        # Market intelligence report
+        self._market_intel_report: Optional[MarketIntelReport] = None
 
     def _log_step(self, step: str, message: str, agent: str = None, reasoning: str = None, references: list[str] = None):
         """Log a step and notify callback."""
@@ -132,6 +140,62 @@ class BOMProcessingFlow(Flow[BOMFlowState]):
         return self.state
 
     @listen(enrich)
+    async def gather_market_intel(self):
+        """Gather market intelligence using Apify web scraping."""
+        if self.state.error:
+            return self.state
+
+        if not self._market_intel_agent:
+            self._log_step("market_intel", "Market intelligence agent not configured - skipping")
+            return self.state
+
+        self._log_step("market_intel", "Starting market intelligence gathering via Apify")
+
+        self._project = self.project_store.get_project(self.state.project_id)
+
+        try:
+            self._market_intel_report = await self._market_intel_agent.gather_intel(
+                self._project.line_items,
+                self._project.context,
+            )
+
+            if self._market_intel_report.items:
+                self._log_step(
+                    "market_intel",
+                    f"Gathered {len(self._market_intel_report.items)} intel items from {self._market_intel_report.total_sources_scraped} sources",
+                    agent="MarketIntelAgent",
+                )
+
+                # Log key findings
+                if self._market_intel_report.supply_chain_risks:
+                    self._log_step(
+                        "market_intel",
+                        f"Supply chain risks identified: {len(self._market_intel_report.supply_chain_risks)}",
+                        agent="MarketIntelAgent",
+                        reasoning="\n".join(f"- {r}" for r in self._market_intel_report.supply_chain_risks[:5]),
+                    )
+
+                if self._market_intel_report.shortage_alerts:
+                    self._log_step(
+                        "market_intel",
+                        f"Shortage alerts: {len(self._market_intel_report.shortage_alerts)}",
+                        agent="MarketIntelAgent",
+                        reasoning="\n".join(f"- {a}" for a in self._market_intel_report.shortage_alerts[:5]),
+                    )
+            else:
+                self._log_step(
+                    "market_intel",
+                    "No market intelligence gathered (Apify may not be configured)",
+                    agent="MarketIntelAgent",
+                )
+
+        except Exception as e:
+            self._log_step("market_intel", f"Market intel gathering failed: {e}", agent="MarketIntelAgent")
+            # Don't fail the flow, just continue without market intel
+
+        return self.state
+
+    @listen(gather_market_intel)
     async def parallel_agent_review(self):
         """Run Engineering, Sourcing, and Finance agents in parallel using asyncio."""
         import time
@@ -169,6 +233,7 @@ class BOMProcessingFlow(Flow[BOMFlowState]):
                 items_to_evaluate,
                 self._project.context,
                 self.offers_store,
+                market_intel_report=self._market_intel_report,
             ),
             self._finance_agent.evaluate_batch(
                 items_to_evaluate,
@@ -376,12 +441,16 @@ _engineering_agent: Optional[EngineeringAgent] = None
 _sourcing_agent: Optional[SourcingAgent] = None
 _finance_agent: Optional[FinanceAgent] = None
 _final_decision_agent: Optional[FinalDecisionAgent] = None
+_market_intel_agent: Optional[MarketIntelAgent] = None
 _org_store: Optional[OrgKnowledgeStore] = None
+_intel_store: Optional[MarketIntelStore] = None
+_apify_client: Optional[ApifyClient] = None
 
 
 def initialize_agents(data_dir: str = "data"):
     """Initialize agents at startup. Call this once when server starts."""
-    global _engineering_agent, _sourcing_agent, _finance_agent, _final_decision_agent, _org_store
+    global _engineering_agent, _sourcing_agent, _finance_agent, _final_decision_agent
+    global _market_intel_agent, _org_store, _intel_store, _apify_client
 
     print("Initializing BOM processing agents...")
 
@@ -393,15 +462,26 @@ def initialize_agents(data_dir: str = "data"):
     _finance_agent = FinanceAgent()
     _final_decision_agent = FinalDecisionAgent()
 
+    # Initialize Apify client and Market Intelligence agent
+    _apify_client = ApifyClient()
+    _intel_store = MarketIntelStore(f"{data_dir}/market_intel.db")
+
+    if _apify_client.is_configured():
+        _market_intel_agent = MarketIntelAgent(_apify_client, _intel_store)
+        print("Market Intelligence agent initialized with Apify")
+    else:
+        _market_intel_agent = None
+        print("Apify not configured - Market Intelligence agent disabled (set APIFY_API_TOKEN to enable)")
+
     print(f"Agents initialized with model: {_engineering_agent._llm.model}")
-    print("Flow: Intake → Enrich → [Engineering | Sourcing | Finance] (parallel) → Final Decision → Complete")
+    print("Flow: Intake → Enrich → Market Intel → [Engineering | Sourcing | Finance] (parallel) → Final Decision → Complete")
 
 
 def get_agents():
-    """Get initialized agents. Returns (engineering, sourcing, finance, final_decision, org_store)."""
+    """Get initialized agents. Returns (engineering, sourcing, finance, final_decision, market_intel, org_store)."""
     if _engineering_agent is None:
         raise RuntimeError("Agents not initialized. Call initialize_agents() first.")
-    return _engineering_agent, _sourcing_agent, _finance_agent, _final_decision_agent, _org_store
+    return _engineering_agent, _sourcing_agent, _finance_agent, _final_decision_agent, _market_intel_agent, _org_store
 
 
 async def run_flow_async(
@@ -411,7 +491,8 @@ async def run_flow_async(
     on_step: Optional[Callable[[FlowTraceStep], None]] = None,
 ) -> Project:
     """Run the BOM processing flow asynchronously."""
-    global _engineering_agent, _sourcing_agent, _finance_agent, _final_decision_agent, _org_store
+    global _engineering_agent, _sourcing_agent, _finance_agent, _final_decision_agent
+    global _market_intel_agent, _org_store
 
     if _engineering_agent is None:
         initialize_agents(data_dir)
@@ -425,6 +506,7 @@ async def run_flow_async(
         _sourcing_agent,
         _finance_agent,
         _final_decision_agent,
+        market_intel_agent=_market_intel_agent,
         on_step=on_step,
     )
     flow.state.bom_path = bom_path

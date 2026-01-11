@@ -12,6 +12,7 @@ from ..models import (
     DecisionStatus,
     RiskLevel,
 )
+from ..models.market_intel import MarketIntelReport
 from ..stores import OrgKnowledgeStore, OffersStore
 from .memory_config import get_llm
 
@@ -62,8 +63,15 @@ class SourcingAgent:
         line_items: list[BOMLineItem],
         project_context: ProjectContext,
         offers_store: OffersStore,
+        market_intel_report: Optional[MarketIntelReport] = None,
     ) -> dict[str, AgentDecision]:
         """Evaluate sourcing for all line items in a single LLM call (async).
+
+        Args:
+            line_items: BOM line items to evaluate
+            project_context: Project context and constraints
+            offers_store: Store with supplier offers
+            market_intel_report: Optional market intelligence from Apify scraping
 
         Returns a dict mapping MPN to AgentDecision.
         Raises ValueError if the LLM returns an invalid response.
@@ -102,6 +110,11 @@ class SourcingAgent:
         if suppliers_context:
             suppliers_section = "## Known Supplier Information\n\n" + "\n\n".join(suppliers_context) + "\n\n---\n\n"
 
+        # Build market intelligence section
+        market_intel_section = ""
+        if market_intel_report and (market_intel_report.items or market_intel_report.supply_chain_risks):
+            market_intel_section = self._build_market_intel_section(market_intel_report, line_items)
+
         task = Task(
             description=f"""Analyze sourcing options for ALL of the following BOM line items.
 
@@ -114,7 +127,7 @@ class SourcingAgent:
 
 ---
 
-{suppliers_section}## LINE ITEMS TO SOURCE
+{suppliers_section}{market_intel_section}## LINE ITEMS TO SOURCE
 
 {all_parts_text}
 
@@ -126,8 +139,9 @@ For EACH part, evaluate:
 3. Price (consider price breaks)
 4. Supplier trust level and performance
 5. Authorized vs broker sourcing
+6. Market intelligence alerts (shortages, supply chain risks, price trends)
 
-Select the best offer for each part.
+Select the best offer for each part. Factor in any market intelligence about supply chain risks or component shortages.
 
 You MUST provide a decision for every part listed: {', '.join(mpn_list)}""",
             expected_output="Structured sourcing decisions for each part with supplier selection and reasoning",
@@ -192,6 +206,74 @@ You MUST provide a decision for every part listed: {', '.join(mpn_list)}""",
         if supplier.notes:
             lines.append(f"- Notes: {'; '.join(supplier.notes)}")
 
+        return "\n".join(lines)
+
+    def _build_market_intel_section(
+        self,
+        report: MarketIntelReport,
+        line_items: list[BOMLineItem],
+    ) -> str:
+        """Build market intelligence section for the prompt."""
+        lines = ["## Market Intelligence (from Apify web scraping)\n"]
+
+        # Supply chain risks
+        if report.supply_chain_risks:
+            lines.append("### Supply Chain Risks")
+            for risk in report.supply_chain_risks[:5]:
+                lines.append(f"- {risk}")
+            lines.append("")
+
+        # Shortage alerts
+        if report.shortage_alerts:
+            lines.append("### Component Shortage Alerts")
+            for alert in report.shortage_alerts[:5]:
+                lines.append(f"- {alert}")
+            lines.append("")
+
+        # Price trends
+        if report.price_trends:
+            lines.append("### Price Trends")
+            for mpn, trend in list(report.price_trends.items())[:10]:
+                lines.append(f"- {mpn}: {trend}")
+            lines.append("")
+
+        # Manufacturer updates
+        if report.manufacturer_updates:
+            lines.append("### Manufacturer Updates")
+            for update in report.manufacturer_updates[:5]:
+                lines.append(f"- {update}")
+            lines.append("")
+
+        # Get relevant intel items for parts in this BOM
+        mpns = {item.mpn.upper() for item in line_items if item.mpn}
+        manufacturers = {item.manufacturer.upper() for item in line_items if item.manufacturer}
+
+        relevant_items = []
+        for item in report.items:
+            # Check if this intel is relevant to any BOM part
+            item_mpns = {m.upper() for m in item.related_mpns}
+            item_mfgs = {m.upper() for m in item.related_manufacturers}
+
+            if (mpns & item_mpns) or (manufacturers & item_mfgs) or item.relevance_score >= 0.7:
+                relevant_items.append(item)
+
+        if relevant_items:
+            lines.append("### Relevant Market Intelligence")
+            for intel in relevant_items[:10]:
+                sentiment_marker = {"positive": "[+]", "negative": "[-]", "neutral": "[~]"}[intel.sentiment.value]
+                lines.append(f"- {sentiment_marker} **{intel.title}**: {intel.summary}")
+                if intel.related_mpns:
+                    lines.append(f"  - Related parts: {', '.join(intel.related_mpns[:5])}")
+            lines.append("")
+
+        # Recommendations
+        if report.recommendations:
+            lines.append("### Sourcing Recommendations")
+            for rec in report.recommendations[:5]:
+                lines.append(f"- {rec}")
+            lines.append("")
+
+        lines.append("---\n\n")
         return "\n".join(lines)
 
     def _build_part_context(

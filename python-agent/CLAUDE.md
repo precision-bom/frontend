@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-This is a multi-agent BOM (Bill of Materials) processing service built with CrewAI and FastAPI. The system automates the review of electronic component sourcing through specialized AI agents (Engineering, Sourcing, Finance) that evaluate parts based on compliance, supply chain risk, and budget constraints.
+This is a multi-agent BOM (Bill of Materials) processing service built with CrewAI and FastAPI. The system automates the review of electronic component sourcing through specialized AI agents (Engineering, Sourcing, Finance, Market Intelligence) that evaluate parts based on compliance, supply chain risk, budget constraints, and real-time market intelligence gathered via Apify web scraping.
 
 ## Quick Start
 
@@ -33,7 +33,10 @@ uv run sourcing trace <project_id>
 | `src/bom_agent_service/cli.py` | CLI using API via httpx |
 | `src/bom_agent_service/flows/bom_flow.py` | CrewAI Flow orchestration |
 | `src/bom_agent_service/agents/*.py` | Agent definitions |
+| `src/bom_agent_service/agents/market_intel.py` | Market Intelligence agent using Apify |
 | `src/bom_agent_service/stores/*.py` | SQLite data stores |
+| `src/bom_agent_service/stores/market_intel_store.py` | Market intelligence cache |
+| `src/bom_agent_service/services/apify_client.py` | Apify API client for web scraping |
 | `src/bom_agent_service/api/*.py` | FastAPI routers |
 
 ## Environment Variables
@@ -47,7 +50,34 @@ ANTHROPIC_API_KEY=sk-ant-...  # For Claude models
 # Optional
 CREWAI_MODEL=gpt-5-nano       # Override default model
 PORT=8000                      # Server port (default: 8000)
+
+# Market Intelligence (Apify)
+APIFY_API_TOKEN=apify_api_... # Enables market intelligence gathering via web scraping
 ```
+
+## Agents
+
+| Agent | Role | Data Sources |
+|-------|------|--------------|
+| EngineeringAgent | Technical compliance review | Org knowledge, part lifecycle data |
+| SourcingAgent | Supply chain risk assessment | Supplier data, market intelligence |
+| FinanceAgent | Cost and budget analysis | Pricing data, MOQ requirements |
+| MarketIntelAgent | Market intelligence gathering | Apify web scraping (news, manufacturer pages) |
+| FinalDecisionAgent | Decision aggregation | All agent outputs |
+
+## Flow
+
+```
+Intake → Enrich → Market Intel (Apify) → [Engineering | Sourcing | Finance] (parallel) → Final Decision → Complete
+```
+
+The Market Intelligence step uses Apify to scrape:
+- Industry news for supply chain risks
+- Manufacturer pages for product updates
+- Component shortage alerts
+- Price trend information
+
+This intel is passed to the SourcingAgent to inform supply chain risk decisions.
 
 ## Testing
 

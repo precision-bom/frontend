@@ -201,8 +201,13 @@ class ApifyClient:
         if not urls:
             return []
 
-        # Use Apify's cheerio-scraper for fast HTML scraping
-        actor_id = "apify/cheerio-scraper"
+        # Use Apify's Web Scraper actor (free tier available)
+        # Try multiple actor options in case one isn't available
+        actor_ids = [
+            "apify/web-scraper",  # Most common free actor
+            "apify/cheerio-scraper",
+            "apify/puppeteer-scraper",
+        ]
 
         input_config = {
             "startUrls": [{"url": url} for url in urls],
@@ -210,25 +215,27 @@ class ApifyClient:
             "maxCrawlDepth": 1,
             "pageFunction": """
                 async function pageFunction(context) {
-                    const { $, request } = context;
+                    const { page, request, log } = context;
 
-                    const title = $('title').text() || '';
-                    const h1s = $('h1').map((i, el) => $(el).text().trim()).get();
-                    const h2s = $('h2').map((i, el) => $(el).text().trim()).get();
-                    const h3s = $('h3').map((i, el) => $(el).text().trim()).get();
+                    const title = await page.title();
+
+                    // Extract headings
+                    const h1s = await page.$$eval('h1', els => els.map(el => el.textContent.trim()));
+                    const h2s = await page.$$eval('h2', els => els.map(el => el.textContent.trim()));
+                    const h3s = await page.$$eval('h3', els => els.map(el => el.textContent.trim()));
 
                     // Extract main text content
-                    const paragraphs = $('p, article, .content, .article-body, main')
-                        .map((i, el) => $(el).text().trim())
-                        .get()
-                        .filter(text => text.length > 50);
+                    const paragraphs = await page.$$eval(
+                        'p, article, .content, .article-body, main',
+                        els => els.map(el => el.textContent.trim()).filter(text => text.length > 50)
+                    );
 
                     // Get links
-                    const links = $('a[href]')
-                        .map((i, el) => $(el).attr('href'))
-                        .get()
-                        .filter(href => href && href.startsWith('http'))
-                        .slice(0, 20);
+                    const links = await page.$$eval('a[href]', els =>
+                        els.map(el => el.href)
+                            .filter(href => href && href.startsWith('http'))
+                            .slice(0, 20)
+                    );
 
                     return {
                         url: request.url,
@@ -241,36 +248,44 @@ class ApifyClient:
             """,
         }
 
-        try:
-            run_data = await self.run_actor(
-                actor_id=actor_id,
-                input_config=input_config,
-                wait_for_finish=True,
-                timeout_secs=120,
-            )
-
-            dataset_id = run_data.get("defaultDatasetId")
-            if not dataset_id:
-                logger.warning("No dataset ID in actor run result")
-                return []
-
-            items = await self.get_dataset_items(dataset_id, limit=100)
-
-            return [
-                ScrapedContent(
-                    url=item.get("url", ""),
-                    title=item.get("title"),
-                    text_content=item.get("text_content", ""),
-                    headings=item.get("headings", []),
-                    links=item.get("links", []),
-                    metadata={"actor_id": actor_id, "run_id": run_data["id"]},
+        last_error = None
+        for actor_id in actor_ids:
+            try:
+                run_data = await self.run_actor(
+                    actor_id=actor_id,
+                    input_config=input_config,
+                    wait_for_finish=True,
+                    timeout_secs=120,
                 )
-                for item in items
-            ]
 
-        except Exception as e:
-            logger.error(f"Failed to scrape URLs with Apify: {e}")
-            raise
+                dataset_id = run_data.get("defaultDatasetId")
+                if not dataset_id:
+                    logger.warning(f"No dataset ID in actor run result for {actor_id}")
+                    continue
+
+                items = await self.get_dataset_items(dataset_id, limit=100)
+
+                return [
+                    ScrapedContent(
+                        url=item.get("url", ""),
+                        title=item.get("title"),
+                        text_content=item.get("text_content", ""),
+                        headings=item.get("headings", []),
+                        links=item.get("links", []),
+                        metadata={"actor_id": actor_id, "run_id": run_data["id"]},
+                    )
+                    for item in items
+                ]
+
+            except Exception as e:
+                logger.warning(f"Actor {actor_id} failed: {e}")
+                last_error = e
+                continue
+
+        if last_error:
+            logger.error(f"All Apify actors failed. Last error: {last_error}")
+            raise last_error
+        return []
 
     async def search_news(
         self,
@@ -292,9 +307,6 @@ class ApifyClient:
         if not self.is_configured():
             raise ValueError("Apify API token not configured. Set APIFY_API_TOKEN env var.")
 
-        # Use Google Search Results Scraper actor
-        actor_id = "apify/google-search-scraper"
-
         # Build search queries
         queries = []
         for term in search_terms:
@@ -302,6 +314,12 @@ class ApifyClient:
             queries.append(f"{term} electronics supply chain")
             queries.append(f"{term} component shortage")
             queries.append(f"{term} manufacturer news")
+
+        # Try different Google scraper actors
+        actor_ids = [
+            "apify/google-search-scraper",
+            "nfp121/google-search-scraper",  # Alternative actor
+        ]
 
         input_config = {
             "queries": queries[:10],  # Limit queries
@@ -312,37 +330,56 @@ class ApifyClient:
             "countryCode": "us",
         }
 
+        last_error = None
+        for actor_id in actor_ids:
+            try:
+                run_data = await self.run_actor(
+                    actor_id=actor_id,
+                    input_config=input_config,
+                    wait_for_finish=True,
+                    timeout_secs=180,
+                )
+
+                dataset_id = run_data.get("defaultDatasetId")
+                if not dataset_id:
+                    continue
+
+                items = await self.get_dataset_items(dataset_id, limit=max_results)
+
+                # Extract URLs from search results and scrape them
+                urls_to_scrape = []
+                for item in items:
+                    organic_results = item.get("organicResults", [])
+                    for result in organic_results[:5]:
+                        url = result.get("url")
+                        if url and not any(blocked in url for blocked in ["youtube.com", "facebook.com", "twitter.com"]):
+                            urls_to_scrape.append(url)
+
+                if not urls_to_scrape:
+                    continue
+
+                # Now scrape the actual news pages
+                return await self.scrape_urls(urls_to_scrape[:max_results], max_pages_per_site=1)
+
+            except Exception as e:
+                logger.warning(f"News search actor {actor_id} failed: {e}")
+                last_error = e
+                continue
+
+        # If all actors fail, fall back to scraping known news sites directly
+        logger.info("Falling back to direct news site scraping")
+        news_urls = [
+            "https://www.eenewseurope.com/en/supply-chain/",
+            "https://www.semiconductorengineering.com/",
+            "https://www.electronicdesign.com/technologies/components",
+        ]
+
         try:
-            run_data = await self.run_actor(
-                actor_id=actor_id,
-                input_config=input_config,
-                wait_for_finish=True,
-                timeout_secs=180,
-            )
-
-            dataset_id = run_data.get("defaultDatasetId")
-            if not dataset_id:
-                return []
-
-            items = await self.get_dataset_items(dataset_id, limit=max_results)
-
-            # Extract URLs from search results and scrape them
-            urls_to_scrape = []
-            for item in items:
-                organic_results = item.get("organicResults", [])
-                for result in organic_results[:5]:
-                    url = result.get("url")
-                    if url and not any(blocked in url for blocked in ["youtube.com", "facebook.com", "twitter.com"]):
-                        urls_to_scrape.append(url)
-
-            if not urls_to_scrape:
-                return []
-
-            # Now scrape the actual news pages
-            return await self.scrape_urls(urls_to_scrape[:max_results], max_pages_per_site=1)
-
+            return await self.scrape_urls(news_urls, max_pages_per_site=2)
         except Exception as e:
             logger.error(f"Failed to search news with Apify: {e}")
+            if last_error:
+                raise last_error
             raise
 
     async def scrape_manufacturer_page(

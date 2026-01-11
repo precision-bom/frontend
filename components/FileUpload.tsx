@@ -83,9 +83,22 @@ export default function FileUpload({ onSuggestionsReady }: FileUploadProps) {
   };
 
   const suggestBoms = async (csvContent: string) => {
+    const identity = localStorage.getItem('forensic_identity');
+    const signature = localStorage.getItem('forensic_signature');
+    const nonce = localStorage.getItem('forensic_nonce');
+
+    if (!identity || !signature || !nonce) {
+      throw new Error("Identity required. Please connect wallet first.");
+    }
+
     const response = await fetch("/api/suggest-boms", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        "X-Forensic-Identity": identity,
+        "X-Forensic-Signature": signature,
+        "X-Forensic-Nonce": nonce
+      },
       body: JSON.stringify({ csvContent }),
     });
 
@@ -117,8 +130,8 @@ export default function FileUpload({ onSuggestionsReady }: FileUploadProps) {
 
   return (
     <div className="bg-substrate-900 border border-substrate-700 rounded-lg p-6">
-      <h2 className="text-lg font-mono font-semibold text-silkscreen mb-4">
-        Upload BOM
+      <h2 className="text-lg font-mono font-semibold text-silkscreen mb-4 uppercase tracking-tighter">
+        Execute Sourcing Strike
       </h2>
 
       {/* Drag and drop area */}
@@ -181,8 +194,8 @@ export default function FileUpload({ onSuggestionsReady }: FileUploadProps) {
           <div className="w-full border-t border-substrate-700" />
         </div>
         <div className="relative flex justify-center text-sm">
-          <span className="px-3 bg-substrate-900 text-substrate-500 font-mono text-xs">
-            OR PASTE CSV
+          <span className="px-3 bg-substrate-900 text-substrate-500 font-mono text-xs uppercase tracking-widest">
+            OR PASTE RAW DATA
           </span>
         </div>
       </div>
@@ -198,29 +211,29 @@ export default function FileUpload({ onSuggestionsReady }: FileUploadProps) {
       <button
         onClick={handleTextSubmit}
         disabled={isLoading || !textInput.trim()}
-        className="mt-3 w-full px-4 py-2.5 bg-trace-500 text-substrate-950 rounded-lg hover:bg-trace-400 disabled:bg-substrate-700 disabled:text-substrate-500 disabled:cursor-not-allowed transition-colors font-mono font-medium"
+        className="mt-3 w-full px-4 py-2.5 bg-trace-500 text-substrate-950 rounded-lg hover:bg-trace-400 disabled:bg-substrate-700 disabled:text-substrate-500 disabled:cursor-not-allowed transition-colors font-mono font-bold uppercase text-sm"
       >
         {isLoading ? (
           <span className="flex items-center justify-center gap-2">
             <div className="w-4 h-4 border-2 border-substrate-950/30 rounded-full border-t-substrate-950 animate-spin" />
-            Searching distributors...
+            Synchronizing...
           </span>
         ) : (
-          "Generate Sourcing Options"
+          "Authorize & Source BOM"
         )}
       </button>
 
       {/* Error message */}
       {error && (
         <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-sm font-mono">
-          {error}
+          <span className="font-bold">FORENSIC ALERT:</span> {error}
         </div>
       )}
 
       {/* Example BOMs */}
       <div className="mt-6 pt-6 border-t border-substrate-700">
-        <h3 className="text-xs font-mono text-substrate-500 uppercase tracking-wider mb-3">
-          Try an example
+        <h3 className="text-[10px] font-mono text-substrate-500 uppercase tracking-widest mb-3">
+          Forensic Templates
         </h3>
         <div className="grid grid-cols-2 gap-2">
           {EXAMPLE_BOMS.map((example) => (
@@ -233,7 +246,7 @@ export default function FileUpload({ onSuggestionsReady }: FileUploadProps) {
               <div className="font-mono text-sm text-silkscreen group-hover:text-trace-400 transition-colors">
                 {example.name}
               </div>
-              <div className="text-xs text-substrate-500 mt-1">
+              <div className="text-[10px] text-substrate-500 mt-1 uppercase">
                 {example.description}
               </div>
             </button>

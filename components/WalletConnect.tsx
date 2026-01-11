@@ -7,9 +7,6 @@ interface EthereumProvider {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
 }
 
-const VAULT_ADDRESS = "0xd24fD54959A2303407505dC602e94BCdA5F4AcDD";
-const SUBSCRIPTION_FEE = "0.001"; // ETH
-
 const CLICKWRAP_MESSAGE = (nonce: string) => `PrecisionBOM Terminal Access & Sourcing Agreement:
 By signing this cryptographic strike, I acknowledge:
 1. Authorization to interact with the PrecisionBOM forensic substrate.
@@ -26,6 +23,8 @@ export default function WalletConnect() {
   const [loading, setLoading] = useState(false);
 
   const paySubscription = async (userAddress: string, provider: ethers.BrowserProvider) => {
+    const VAULT_ADDRESS = "0xd24fD54959A2303407505dC602e94BCdA5F4AcDD";
+    const SUBSCRIPTION_FEE = "0.001"; // ETH
     try {
       setStatus("Escalating to Payment...");
       const signer = await provider.getSigner();
@@ -70,6 +69,10 @@ export default function WalletConnect() {
 
       if (response.status === 200) {
         setStatus(`Active (Until: ${data.expiration})`);
+        // Store forensic context for core API gating
+        localStorage.setItem('forensic_identity', userAddress);
+        localStorage.setItem('forensic_signature', signature);
+        localStorage.setItem('forensic_nonce', nonce);
       } else if (response.status === 402) {
         // AUTOMATED ESCALATION
         await paySubscription(userAddress, provider);
@@ -79,7 +82,7 @@ export default function WalletConnect() {
     } catch (error: unknown) {
       const err = error as Error;
       console.error("Access Check Error:", err);
-      setStatus("Verification Failed");
+      setStatus("Failed to verify identity");
     } finally {
       setLoading(false);
     }
@@ -95,9 +98,9 @@ export default function WalletConnect() {
         setAddress(userAddress);
         await checkAccess(userAddress);
       } catch (error: unknown) {
-        const err = error as Error;
+        const err = error as Error & { code?: number };
         console.error("Connection Error:", err);
-        if ((err as any).code === -32002) {
+        if (err.code === -32002) {
           alert("MetaMask request is already pending. Please open your wallet.");
         }
       } finally {
@@ -111,6 +114,9 @@ export default function WalletConnect() {
   const disconnectWallet = () => {
     setAddress(null);
     setStatus(null);
+    localStorage.removeItem('forensic_identity');
+    localStorage.removeItem('forensic_signature');
+    localStorage.removeItem('forensic_nonce');
   };
 
   return (

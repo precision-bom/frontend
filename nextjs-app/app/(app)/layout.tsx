@@ -80,7 +80,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             {/* Logo */}
             <Link href="/app" className="flex items-center group">
               <Image
-                src="/PrecisionBOM-G-W.svg"
+                src="/PrecisionBOM-G-W.svg"  /*replaced the logo file*/
                 alt="PrecisionBOM"
                 width={180}
                 height={36}

@@ -9,48 +9,48 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // PCB-inspired color palette
+        // Industrial PCB color palette - white on black with green accent
         trace: {
           50: "#f0fdf4",
           100: "#dcfce7",
-          200: "#bbf7d0",
-          300: "#86efac",
-          400: "#4ade80",
-          500: "#22c55e", // Primary - soldermask green
-          600: "#16a34a",
-          700: "#15803d",
-          800: "#166534",
-          900: "#14532d",
-          950: "#052e16",
+          200: "#a7f3d0",
+          300: "#6ee7b7",
+          400: "#34d399",
+          500: "#10b981", // Primary - muted industrial green
+          600: "#059669",
+          700: "#047857",
+          800: "#065f46",
+          900: "#064e3b",
+          950: "#022c22",
         },
         copper: {
-          50: "#fffbeb",
-          100: "#fef3c7",
-          200: "#fde68a",
-          300: "#fcd34d",
-          400: "#fbbf24", // Copper trace highlight
-          500: "#f59e0b",
-          600: "#d97706",
-          700: "#b45309",
-          800: "#92400e",
-          900: "#78350f",
-          950: "#451a03",
+          50: "#fefce8",
+          100: "#fef9c3",
+          200: "#fef08a",
+          300: "#fde047",
+          400: "#facc15", // Accent yellow - use sparingly
+          500: "#eab308",
+          600: "#ca8a04",
+          700: "#a16207",
+          800: "#854d0e",
+          900: "#713f12",
+          950: "#422006",
         },
         substrate: {
-          50: "#fafaf9",
-          100: "#f5f5f4",
-          200: "#e7e5e4",
-          300: "#d6d3d1",
-          400: "#a8a29e",
-          500: "#78716c",
-          600: "#57534e",
-          700: "#44403c",
-          800: "#292524",
-          900: "#1c1917",
-          950: "#0c0a09",
+          50: "#fafafa",
+          100: "#f4f4f5",
+          200: "#e4e4e7",
+          300: "#d4d4d8",
+          400: "#a1a1aa",
+          500: "#71717a",
+          600: "#52525b",
+          700: "#3f3f46",
+          800: "#27272a",
+          900: "#18181b",
+          950: "#09090b",
         },
         silkscreen: "#ffffff",
-        solder: "#c0c0c0",
+        solder: "#a1a1aa",
       },
       fontFamily: {
         mono: [
@@ -72,30 +72,36 @@ const config: Config = {
       },
       backgroundImage: {
         "grid-pattern":
-          "linear-gradient(to right, rgba(34, 197, 94, 0.03) 1px, transparent 1px), linear-gradient(to bottom, rgba(34, 197, 94, 0.03) 1px, transparent 1px)",
-        "trace-gradient":
-          "linear-gradient(135deg, #22c55e 0%, #16a34a 50%, #15803d 100%)",
-        "copper-gradient":
-          "linear-gradient(135deg, #fbbf24 0%, #f59e0b 50%, #d97706 100%)",
+          "linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px), linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px)",
         "dark-gradient":
-          "radial-gradient(ellipse at top, #171717 0%, #0a0a0a 100%)",
+          "radial-gradient(ellipse at top, #18181b 0%, #09090b 100%)",
       },
       backgroundSize: {
-        grid: "24px 24px",
+        grid: "32px 32px",
       },
       boxShadow: {
-        trace: "0 0 20px rgba(34, 197, 94, 0.15)",
-        "trace-lg": "0 0 40px rgba(34, 197, 94, 0.2)",
-        copper: "0 0 20px rgba(251, 191, 36, 0.15)",
+        trace: "0 0 20px rgba(16, 185, 129, 0.1)",
+        "trace-lg": "0 0 40px rgba(16, 185, 129, 0.15)",
+        glow: "0 0 30px rgba(255, 255, 255, 0.05)",
       },
       animation: {
         "pulse-slow": "pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite",
         "trace-flow": "traceFlow 2s ease-in-out infinite",
+        "trace-pulse": "tracePulse 4s linear infinite",
+        "fade-in-up": "fadeInUp 0.5s ease-out forwards",
       },
       keyframes: {
         traceFlow: {
           "0%, 100%": { opacity: "0.5" },
           "50%": { opacity: "1" },
+        },
+        tracePulse: {
+          "0%": { transform: "translateX(-100%)" },
+          "100%": { transform: "translateX(400%)" },
+        },
+        fadeInUp: {
+          "0%": { opacity: "0", transform: "translateY(10px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
         },
       },
     },

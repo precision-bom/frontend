@@ -118,8 +118,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 </svg>
               </div>
               <span className="font-mono font-semibold text-lg">
-                <span className="text-trace-500">Trace</span>
-                <span className="text-copper-400">Source</span>
+                <span className="text-trace-500">Precision</span>
+                <span className="text-copper-400">BOM</span>
               </span>
             </Link>
 

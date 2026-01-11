@@ -2,7 +2,7 @@ import sgMail from "@sendgrid/mail";
 
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
 const FROM_EMAIL = process.env.FROM_EMAIL || "noreply@example.com";
-const APP_NAME = "TraceSource";
+const APP_NAME = "PrecisionBOM";
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
 if (SENDGRID_API_KEY) {
@@ -84,7 +84,7 @@ If you didn't request this, you can safely ignore this email.
     </div>
     <div style="background-color: #0f0f0f; padding: 16px 32px; border-top: 1px solid #2a2a2a;">
       <p style="margin: 0; font-size: 11px; color: #525252; text-align: center;">
-        ${APP_NAME} — Trace your parts. Source with confidence.
+        ${APP_NAME} — Precision sourcing for every component.
       </p>
     </div>
   </div>
@@ -142,7 +142,7 @@ This link expires in 24 hours.
     </div>
     <div style="background-color: #0f0f0f; padding: 16px 32px; border-top: 1px solid #2a2a2a;">
       <p style="margin: 0; font-size: 11px; color: #525252; text-align: center;">
-        ${APP_NAME} — Trace your parts. Source with confidence.
+        ${APP_NAME} — Precision sourcing for every component.
       </p>
     </div>
   </div>
@@ -190,7 +190,7 @@ Get started: ${APP_URL}/app
     </div>
     <div style="background-color: #0f0f0f; padding: 16px 32px; border-top: 1px solid #2a2a2a;">
       <p style="margin: 0; font-size: 11px; color: #525252; text-align: center;">
-        ${APP_NAME} — Trace your parts. Source with confidence.
+        ${APP_NAME} — Precision sourcing for every component.
       </p>
     </div>
   </div>

@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "TraceSource - AI-Powered BOM Sourcing",
+  title: "PrecisionBOM - AI-Powered BOM Sourcing",
   description:
-    "Trace your parts. Source with confidence. AI-powered BOM optimization across Octopart, Mouser, and DigiKey.",
+    "Precision sourcing with DigiKey. AI-powered BOM optimization for accurate, reliable component sourcing.",
 };
 
 export default function RootLayout({

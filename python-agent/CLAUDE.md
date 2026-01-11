@@ -41,11 +41,11 @@ uv run sourcing trace <project_id>
 Required in `.env`:
 ```
 # At least one LLM key required
-OPENAI_API_KEY=sk-...         # For gpt-4o-mini (default)
+OPENAI_API_KEY=sk-...         # For gpt-5-nano (default)
 ANTHROPIC_API_KEY=sk-ant-...  # For Claude models
 
 # Optional
-CREWAI_MODEL=gpt-4o-mini      # Override default model
+CREWAI_MODEL=gpt-5-nano       # Override default model
 PORT=8000                      # Server port (default: 8000)
 ```
 

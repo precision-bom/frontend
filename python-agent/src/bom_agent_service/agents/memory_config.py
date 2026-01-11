@@ -10,7 +10,7 @@ from ..stores import OrgKnowledgeStore
 
 
 # Default model - can be overridden via environment variable
-DEFAULT_MODEL = os.environ.get("CREWAI_MODEL", "gpt-4o-mini")
+DEFAULT_MODEL = os.environ.get("CREWAI_MODEL", "gpt-5-nano")
 
 
 def get_llm(model: Optional[str] = None) -> LLM:

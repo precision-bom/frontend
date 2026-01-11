@@ -37,11 +37,11 @@ Copy `.env.example` to `.env` and configure:
 
 ```env
 # LLM API Key (at least one required)
-OPENAI_API_KEY=sk-...        # Required for gpt-4o-mini (default)
+OPENAI_API_KEY=sk-...        # Required for gpt-5-nano (default)
 ANTHROPIC_API_KEY=sk-ant-... # Required for Claude models
 
 # Optional
-CREWAI_MODEL=gpt-4o-mini     # Model for agents
+CREWAI_MODEL=gpt-5-nano      # Model for agents
 PORT=8000                     # API server port
 ```
 

@@ -7,7 +7,7 @@ const protectedRoutes = ["/app"];
 // Routes that should redirect to /app if already authenticated
 const authRoutes = ["/login", "/register"];
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const sessionCookie = request.cookies.get("session");
 

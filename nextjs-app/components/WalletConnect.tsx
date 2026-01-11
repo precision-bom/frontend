@@ -23,20 +23,28 @@ export default function WalletConnect() {
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: SEPOLIA_CHAIN_ID }],
       });
+      return true;
     } catch (switchError: any) {
       if (switchError.code === 4902) {
-        await ethereum.request({
-          method: 'wallet_addEthereumChain',
-          params: [{
-            chainId: SEPOLIA_CHAIN_ID,
-            chainName: 'Sepolia Test Network',
-            nativeCurrency: { name: 'Sepolia ETH', symbol: 'ETH', decimals: 18 },
-            rpcUrls: ['https://ethereum-sepolia-rpc.publicnode.com'],
-            blockExplorerUrls: ['https://sepolia.etherscan.io'],
-          }],
-        });
+        try {
+          await ethereum.request({
+            method: 'wallet_addEthereumChain',
+            params: [{
+              chainId: SEPOLIA_CHAIN_ID,
+              chainName: 'Sepolia Test Network',
+              nativeCurrency: { name: 'Sepolia ETH', symbol: 'ETH', decimals: 18 },
+              rpcUrls: ['https://ethereum-sepolia-rpc.publicnode.com'],
+              blockExplorerUrls: ['https://sepolia.etherscan.io'],
+            }],
+          });
+          return true;
+        } catch (addError) {
+          console.error("Failed to add Sepolia:", addError);
+          return false;
+        }
       } else {
-        throw switchError;
+        console.error("User rejected network switch");
+        return false;
       }
     }
   };
@@ -46,7 +54,13 @@ export default function WalletConnect() {
     const SUBSCRIPTION_FEE = "0.001"; // ETH
     try {
       const ethereum = (window as { ethereum?: EthereumProvider }).ethereum;
-      if (ethereum) await ensureSepolia(ethereum);
+      if (ethereum) {
+        const switched = await ensureSepolia(ethereum);
+        if (!switched) {
+          setStatus("Wrong Network");
+          return;
+        }
+      }
 
       setStatus("Escalating to Payment...");
       const signer = await provider.getSigner();
@@ -62,7 +76,8 @@ export default function WalletConnect() {
       // WAIT for Sepolia indexing
       await new Promise(resolve => setTimeout(resolve, 15000));
       
-      await checkAccess(userAddress, false);
+      // Re-verify without prompting for signature again
+      await checkAccess(userAddress, false, false);
     } catch (error: unknown) {
       const err = error as Error;
       console.error("Payment Error:", err);
@@ -70,20 +85,31 @@ export default function WalletConnect() {
     }
   };
 
-  const checkAccess = async (userAddress: string, allowEscalation: boolean = true) => {
+  const checkAccess = async (userAddress: string, allowEscalation: boolean = true, forceSignature: boolean = true) => {
     setLoading(true);
     try {
       const ethereum = (window as { ethereum?: EthereumProvider }).ethereum;
       if (!ethereum) return;
 
-      await ensureSepolia(ethereum);
+      const switched = await ensureSepolia(ethereum);
+      if (!switched) {
+        setStatus("Wrong Network");
+        setLoading(false);
+        return;
+      }
 
       const provider = new ethers.BrowserProvider(ethereum as ethers.Eip1193Provider);
-      const nonce = Date.now().toString();
-      const signer = await provider.getSigner();
-      
-      console.log("Triggering Clickwrap Handshake...");
-      const signature = await signer.signMessage(CLICKWRAP_MESSAGE(nonce));
+      let signature = localStorage.getItem('forensic_signature');
+      let nonce = localStorage.getItem('forensic_nonce');
+
+      if (forceSignature || !signature || !nonce) {
+        nonce = Date.now().toString();
+        const signer = await provider.getSigner();
+        console.log("Triggering Clickwrap Handshake...");
+        signature = await signer.signMessage(CLICKWRAP_MESSAGE(nonce));
+        localStorage.setItem('forensic_nonce', nonce);
+        localStorage.setItem('forensic_signature', signature);
+      }
 
       const response = await fetch('/api/gatekeeper', {
         method: 'POST',
@@ -97,8 +123,6 @@ export default function WalletConnect() {
         setStatus("Active");
         setTokens(data.tokens || "0");
         localStorage.setItem('forensic_identity', userAddress);
-        localStorage.setItem('forensic_signature', signature);
-        localStorage.setItem('forensic_nonce', nonce);
       } else if (response.status === 402) {
         setTokens(data.tokens || "0");
         if (allowEscalation) {

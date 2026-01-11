@@ -37,8 +37,8 @@ export default function WalletConnect() {
       await tx.wait();
       setStatus("Payment Confirmed. Syncing...");
       
-      // Final re-check to trigger server-side auto-write
-      await checkAccess(userAddress);
+      // Re-verify after successful payment - pass false to prevent loop
+      await checkAccess(userAddress, false);
     } catch (error: unknown) {
       const err = error as Error;
       console.error("Payment Error:", err);
@@ -46,7 +46,7 @@ export default function WalletConnect() {
     }
   };
 
-  const checkAccess = async (userAddress: string) => {
+  const checkAccess = async (userAddress: string, allowEscalation: boolean = true) => {
     setLoading(true);
     try {
       const ethereum = (window as { ethereum?: EthereumProvider }).ethereum;
@@ -74,15 +74,19 @@ export default function WalletConnect() {
         localStorage.setItem('forensic_signature', signature);
         localStorage.setItem('forensic_nonce', nonce);
       } else if (response.status === 402) {
-        // AUTOMATED ESCALATION
-        await paySubscription(userAddress, provider);
+        if (allowEscalation) {
+          // AUTOMATED ESCALATION
+          await paySubscription(userAddress, provider);
+        } else {
+          setStatus("Payment Required (x402)");
+        }
       } else {
         setStatus(`Error: ${data.error}`);
       }
     } catch (error: unknown) {
       const err = error as Error;
       console.error("Access Check Error:", err);
-      setStatus("Failed to verify identity");
+      setStatus("Verification Failed");
     } finally {
       setLoading(false);
     }

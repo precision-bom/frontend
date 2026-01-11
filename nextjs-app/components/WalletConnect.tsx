@@ -3,29 +3,51 @@
 import { useState } from 'react';
 import { ethers } from 'ethers';
 
+const SEPOLIA_CHAIN_ID = "0xaa36a7"; // 11155111
+
 interface EthereumProvider {
   request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
 }
 
-const CLICKWRAP_MESSAGE = (nonce: string) => `PrecisionBOM Terminal Access & Sourcing Agreement:
-By signing this cryptographic strike, I acknowledge:
-1. Authorization to interact with the PrecisionBOM forensic substrate.
-2. Acceptance of the 0.001 ETH monthly subscription fee.
-3. Consent to the recording of all sourcing strikes within ERC-7827.
-NOTE: If no active substrate record is found for this identity, 
-a transaction request for 0.001 ETH will follow to initialize access.
-
-Session Nonce: ${nonce}`;
+const CLICKWRAP_MESSAGE = (nonce: string) => `PrecisionBOM Terminal Access & Sourcing Agreement: By signing this cryptographic strike, I acknowledge: 1. Authorization to interact with the PrecisionBOM forensic substrate. 2. Acceptance of the 0.001 ETH (Sepolia) monthly subscription fee. 3. Consent to the recording of all sourcing strikes within ERC-7827. NOTE: If no active substrate record is found for this identity, a transaction request for 0.001 Sepolia ETH will follow to initialize access. Session Nonce: ${nonce}`;
 
 export default function WalletConnect() {
   const [address, setAddress] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [tokens, setTokens] = useState<string>("0");
   const [loading, setLoading] = useState(false);
+
+  const ensureSepolia = async (ethereum: EthereumProvider) => {
+    try {
+      await ethereum.request({
+        method: 'wallet_switchEthereumChain',
+        params: [{ chainId: SEPOLIA_CHAIN_ID }],
+      });
+    } catch (switchError: any) {
+      if (switchError.code === 4902) {
+        await ethereum.request({
+          method: 'wallet_addEthereumChain',
+          params: [{
+            chainId: SEPOLIA_CHAIN_ID,
+            chainName: 'Sepolia Test Network',
+            nativeCurrency: { name: 'Sepolia ETH', symbol: 'ETH', decimals: 18 },
+            rpcUrls: ['https://ethereum-sepolia-rpc.publicnode.com'],
+            blockExplorerUrls: ['https://sepolia.etherscan.io'],
+          }],
+        });
+      } else {
+        throw switchError;
+      }
+    }
+  };
 
   const paySubscription = async (userAddress: string, provider: ethers.BrowserProvider) => {
     const VAULT_ADDRESS = "0xd24fD54959A2303407505dC602e94BCdA5F4AcDD";
     const SUBSCRIPTION_FEE = "0.001"; // ETH
     try {
+      const ethereum = (window as { ethereum?: EthereumProvider }).ethereum;
+      if (ethereum) await ensureSepolia(ethereum);
+
       setStatus("Escalating to Payment...");
       const signer = await provider.getSigner();
       const tx = await signer.sendTransaction({
@@ -35,9 +57,11 @@ export default function WalletConnect() {
 
       setStatus("Processing Strike...");
       await tx.wait();
-      setStatus("Payment Confirmed. Syncing...");
+      setStatus("Payment Confirmed. Syncing (15s)...");
       
-      // Re-verify after successful payment - pass false to prevent loop
+      // WAIT for Sepolia indexing
+      await new Promise(resolve => setTimeout(resolve, 15000));
+      
       await checkAccess(userAddress, false);
     } catch (error: unknown) {
       const err = error as Error;
@@ -51,6 +75,8 @@ export default function WalletConnect() {
     try {
       const ethereum = (window as { ethereum?: EthereumProvider }).ethereum;
       if (!ethereum) return;
+
+      await ensureSepolia(ethereum);
 
       const provider = new ethers.BrowserProvider(ethereum as ethers.Eip1193Provider);
       const nonce = Date.now().toString();
@@ -68,20 +94,20 @@ export default function WalletConnect() {
       const data = await response.json();
 
       if (response.status === 200) {
-        setStatus(`Active (Until: ${data.expiration})`);
-        // Store forensic context for core API gating
+        setStatus("Active");
+        setTokens(data.tokens || "0");
         localStorage.setItem('forensic_identity', userAddress);
         localStorage.setItem('forensic_signature', signature);
         localStorage.setItem('forensic_nonce', nonce);
       } else if (response.status === 402) {
+        setTokens(data.tokens || "0");
         if (allowEscalation) {
-          // AUTOMATED ESCALATION
           await paySubscription(userAddress, provider);
         } else {
-          setStatus("Payment Required (x402)");
+          setStatus("Payment Required");
         }
       } else {
-        setStatus(`Error: ${data.error}`);
+        setStatus(`Error`);
       }
     } catch (error: unknown) {
       const err = error as Error;
@@ -105,7 +131,7 @@ export default function WalletConnect() {
         const err = error as Error & { code?: number };
         console.error("Connection Error:", err);
         if (err.code === -32002) {
-          alert("MetaMask request is already pending. Please open your wallet.");
+          alert("MetaMask request is already pending.");
         }
       } finally {
         setLoading(false);
@@ -118,6 +144,7 @@ export default function WalletConnect() {
   const disconnectWallet = () => {
     setAddress(null);
     setStatus(null);
+    setTokens("0");
     localStorage.removeItem('forensic_identity');
     localStorage.removeItem('forensic_signature');
     localStorage.removeItem('forensic_nonce');
@@ -128,9 +155,12 @@ export default function WalletConnect() {
       {address ? (
         <div className="flex items-center gap-3">
           <div className="flex flex-col items-end border-r border-substrate-800 pr-3">
-            <span className="text-[10px] text-trace-500 uppercase tracking-widest font-bold">
-              {status}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] text-trace-400 font-bold font-mono">{tokens} T</span>
+              <span className="text-[10px] text-trace-500 uppercase tracking-widest font-bold">
+                {status}
+              </span>
+            </div>
             <span className="text-xs text-white opacity-70">
               {address.slice(0, 6)}...{address.slice(-4)}
             </span>

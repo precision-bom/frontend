@@ -1,62 +1,60 @@
-# PrecisionBOM Web Application
+# PrecisionBOM Terminal
 
-Next.js 14 web application for AI-powered BOM sourcing.
+Next.js terminal for high-fidelity, AI-powered BOM sourcing gated by forensic blockchain substrate.
 
 **Production URL**: https://precisionbom.com
 
-## Features
+## Forensic Sourcing Protocol (V1.0)
 
-- **BOM Upload & Parsing** - Upload CSV/Excel BOMs for automatic parsing
-- **Part Search** - Real-time search across DigiKey, Mouser, Octopart
-- **AI Suggestions** - OpenAI-powered part recommendations and alternatives
-- **User Authentication** - Email/password auth with JWT sessions
-- **Blockchain Integration** - ERC-7827 audit trail via ethers.js
+The PrecisionBOM terminal implements a unique **Thermodynamic Sourcing Protocol** leveraging `ERC-7827` and `x402` principles to ensure identity integrity and compute efficiency.
+
+### 1. Identity Handshake (Clickwrap)
+Access begins with a cryptographic **Clickwrap Handshake**. Users must anchor their 0x identity by signing a terminal access agreement. This anchors the session in the forensic substrate without requiring traditional passwords.
+
+### 2. Tiered Gatekeeper (x402 + ERC-7827)
+Sourcing strikes are protected by a three-tiered verification system:
+- **Tier 1: Forensic Cache** - Instant lookup against the `ERC-7827` on-chain registry.
+- **Tier 2: Ledger Audit** - Autonomous scanning of the **Sepolia Ledger** for valid 0.001 ETH payment strikes.
+- **Tier 3: Auto-Write Sync** - Server-side synchronization that anchors ledger payments into the substrate, granting 30-day access and refilling agentic capital.
+
+### 3. Thermodynamic AI Pricing
+AI sourcing strikes are grounded in thermodynamic capital:
+- **Strike Cost:** 50 Tokens per intelligent sourcing operation.
+- **Capital Refill:** 1000 Tokens granted upon every successful 0.001 Sepolia ETH subscription strike.
+- **Visibility:** Real-time monitoring of identity, expiry, and capital via the **Forensic Ledger**.
 
 ## Tech Stack
 
-- **Framework**: Next.js 14 (App Router)
-- **Database**: Neon Postgres + Drizzle ORM
-- **Styling**: Tailwind CSS
-- **Auth**: Custom JWT implementation with bcrypt
-- **APIs**: DigiKey, Octopart/Nexar, OpenAI
+- **Framework**: Next.js 16 (App Router)
+- **Blockchain**: Sepolia Test Network
+- **Protocol Standards**: ERC-7827 (JSON VVC), x402 (Payment Required)
+- **Identity**: EIP-191 Signatures (ethers.js)
+- **AI**: OpenAI GPT-4o-mini (via internal agent logic)
 
 ## Getting Started
 
 ### Prerequisites
 - Node.js 18+
-- Neon Postgres database
+- Web3 Wallet (MetaMask) set to **Sepolia Network**
 
 ### Installation
 
 ```bash
+cd nextjs-app
 npm install
 ```
 
 ### Environment Variables
 
-Copy `.env.example` to `.env` and configure:
-
+Ensure `.env` contains:
 ```env
-# Database (Neon)
-DATABASE_URL=postgresql://...
+# Sepolia Infrastructure
+SEPOLIA_RPC_URL=https://...
+PRIVATE_KEY=0x... (Server-side signer for Auto-Write)
+ETHERSCAN_API_KEY=... (For ledger audits)
 
-# Auth
-JWT_SECRET=your-secret-key
-
-# APIs
+# AI Strikes
 OPENAI_API_KEY=sk-...
-OCTOPART_CLIENT_ID=...
-OCTOPART_CLIENT_SECRET=...
-DIGIKEY_CLIENT_ID=...
-DIGIKEY_CLIENT_SECRET=...
-```
-
-### Database Setup
-
-Push the schema to your Neon database:
-
-```bash
-npm run db:push
 ```
 
 ### Development
@@ -65,49 +63,17 @@ npm run db:push
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+Open [http://localhost:3000](http://localhost:3000) to initiate the forensic boot sequence.
 
-## Project Structure
+## Substrate Components
 
-```
-nextjs-app/
-├── app/
-│   ├── (app)/         # Protected app routes
-│   ├── (auth)/        # Login/register pages
-│   ├── (marketing)/   # Public landing pages
-│   └── api/           # API routes
-│       ├── auth/      # Authentication endpoints
-│       ├── parse-bom/ # BOM parsing
-│       ├── search-parts/
-│       ├── suggest/   # AI suggestions
-│       └── gatekeeper/ # Blockchain integration
-├── components/        # React components
-├── lib/
-│   ├── db/           # Drizzle schema & connection
-│   ├── auth/         # JWT utilities
-│   ├── providers/    # DigiKey, Octopart clients
-│   └── email/        # SendGrid integration
-└── public/
-```
+| Component | Path | Description |
+|-----------|------|-------------|
+| **Gatekeeper API** | `app/api/gatekeeper/route.ts` | Tiered verification engine |
+| **Forensic Ledger** | `components/PaymentTab.tsx` | Substrate status & payment UI |
+| **Identity Anchor** | `components/WalletConnect.tsx` | Clickwrap handshake handler |
+| **Forensic Gate** | `lib/forensic-gate.ts` | Server-side identity utility |
+| **BOM Agent** | `lib/bom-agent.ts` | Thermodynamic sourcing logic |
 
-## Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start development server |
-| `npm run build` | Production build |
-| `npm run db:push` | Push schema to database |
-| `npm run db:studio` | Open Drizzle Studio |
-| `npm run db:generate` | Generate migrations |
-
-## API Routes
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/auth/login` | POST | User login |
-| `/api/auth/register` | POST | User registration |
-| `/api/parse-bom` | POST | Parse uploaded BOM file |
-| `/api/search-parts` | GET | Search parts by query |
-| `/api/suggest` | POST | Get AI part suggestions |
-| `/api/suggest-boms` | POST | Generate BOM suggestions |
-| `/api/gatekeeper` | POST | Blockchain operations |
+---
+*Note: PrecisionBOM operates on a 'Strike-First' economy. Every sourcing decision is permanently recorded in the Heartwood substrate.*

@@ -39,64 +39,43 @@ export default function WalletConnect() {
           });
           return true;
         } catch (addError) {
-          console.error("Failed to add Sepolia:", addError);
           return false;
         }
-      } else {
-        console.error("User rejected network switch");
-        return false;
       }
+      return false;
     }
   };
 
   const paySubscription = async (userAddress: string, provider: ethers.BrowserProvider) => {
     const VAULT_ADDRESS = "0xd24fD54959A2303407505dC602e94BCdA5F4AcDD";
-    const SUBSCRIPTION_FEE = "0.001"; // ETH
+    const SUBSCRIPTION_FEE = "0.001"; 
     try {
       const ethereum = (window as { ethereum?: EthereumProvider }).ethereum;
-      if (ethereum) {
-        const switched = await ensureSepolia(ethereum);
-        if (!switched) {
-          setStatus("Wrong Network");
-          return;
-        }
-      }
+      if (ethereum) await ensureSepolia(ethereum);
 
-      setStatus("Escalating to Payment...");
+      setStatus("Escalating Strike...");
       const signer = await provider.getSigner();
       const tx = await signer.sendTransaction({
         to: VAULT_ADDRESS,
         value: ethers.parseEther(SUBSCRIPTION_FEE)
       });
 
-      setStatus("Processing Strike...");
+      setStatus("Processing Transaction...");
       await tx.wait();
-      setStatus("Payment Confirmed. Syncing (15s)...");
+      setStatus("Payment Confirmed. Syncing...");
       
-      // WAIT for Sepolia indexing
-      await new Promise(resolve => setTimeout(resolve, 15000));
-      
-      // Re-verify without prompting for signature again
-      await checkAccess(userAddress, false, false);
+      // Re-verify with txHash for instant resolution
+      await checkAccess(userAddress, false, false, tx.hash);
     } catch (error: unknown) {
-      const err = error as Error;
-      console.error("Payment Error:", err);
-      setStatus("Payment Cancelled/Failed");
+      setStatus("Strike Cancelled");
     }
   };
 
-  const checkAccess = async (userAddress: string, allowEscalation: boolean = true, forceSignature: boolean = true) => {
+  const checkAccess = async (userAddress: string, allowEscalation: boolean = true, forceSignature: boolean = true, txHash?: string) => {
     setLoading(true);
     try {
       const ethereum = (window as { ethereum?: EthereumProvider }).ethereum;
       if (!ethereum) return;
-
-      const switched = await ensureSepolia(ethereum);
-      if (!switched) {
-        setStatus("Wrong Network");
-        setLoading(false);
-        return;
-      }
 
       const provider = new ethers.BrowserProvider(ethereum as ethers.Eip1193Provider);
       let signature = localStorage.getItem('forensic_signature');
@@ -105,7 +84,6 @@ export default function WalletConnect() {
       if (forceSignature || !signature || !nonce) {
         nonce = Date.now().toString();
         const signer = await provider.getSigner();
-        console.log("Triggering Clickwrap Handshake...");
         signature = await signer.signMessage(CLICKWRAP_MESSAGE(nonce));
         localStorage.setItem('forensic_nonce', nonce);
         localStorage.setItem('forensic_signature', signature);
@@ -114,7 +92,7 @@ export default function WalletConnect() {
       const response = await fetch('/api/gatekeeper', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: userAddress, signature, nonce })
+        body: JSON.stringify({ address: userAddress, signature, nonce, txHash })
       });
 
       const data = await response.json();
@@ -134,8 +112,6 @@ export default function WalletConnect() {
         setStatus(`Error`);
       }
     } catch (error: unknown) {
-      const err = error as Error;
-      console.error("Access Check Error:", err);
       setStatus("Verification Failed");
     } finally {
       setLoading(false);
@@ -152,16 +128,10 @@ export default function WalletConnect() {
         setAddress(userAddress);
         await checkAccess(userAddress);
       } catch (error: unknown) {
-        const err = error as Error & { code?: number };
-        console.error("Connection Error:", err);
-        if (err.code === -32002) {
-          alert("MetaMask request is already pending.");
-        }
+        console.error("Connection Error:", error);
       } finally {
         setLoading(false);
       }
-    } else {
-      alert("Please install a Web3 wallet (e.g., MetaMask)");
     }
   };
 

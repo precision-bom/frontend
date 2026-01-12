@@ -960,20 +960,34 @@ def apikey():
 
 
 @apikey.command("create")
+@click.option("--client-id", "-c", required=True, help="Client ID this key belongs to")
 @click.option("--name", "-n", required=True, help="Name for the API key (e.g., 'nextjs-service')")
 @click.option("--scopes", "-s", default="all", help="Comma-separated scopes (default: all)")
-def apikey_create(name: str, scopes: str):
-    """Create a new API key for service authentication."""
-    from .stores import ApiKeyStore
+def apikey_create(client_id: str, name: str, scopes: str):
+    """Create a new API key for service authentication.
 
-    store = ApiKeyStore("data/api_keys.db")
+    Requires a client_id. Use 'sourcing admin bootstrap' to create a client first,
+    or list existing clients with the API.
+    """
+    from .stores import get_api_key_store, get_client_store
+
+    # Verify client exists
+    client_store = get_client_store()
+    client = client_store.get_client(client_id)
+    if not client:
+        console.print(f"[red]Client not found: {client_id}[/]")
+        console.print("[dim]Use 'sourcing admin bootstrap' to create a client first.[/]")
+        return
+
+    store = get_api_key_store()
     scope_list = [s.strip() for s in scopes.split(",")]
 
-    api_key, raw_key = store.create_key(name=name, scopes=scope_list)
+    api_key, raw_key = store.create_key(name=name, client_id=client_id, scopes=scope_list)
 
     console.print()
     console.print(Panel.fit(
         f"[bold green]API Key Created Successfully[/]\n\n"
+        f"[bold]Client:[/] {client.name} ({client_id})\n"
         f"[bold]Name:[/] {api_key.name}\n"
         f"[bold]Key ID:[/] {api_key.key_id}\n"
         f"[bold]Scopes:[/] {', '.join(api_key.scopes)}\n"
@@ -986,12 +1000,13 @@ def apikey_create(name: str, scopes: str):
 
 
 @apikey.command("list")
-def apikey_list():
+@click.option("--client-id", "-c", default=None, help="Filter by client ID")
+def apikey_list(client_id: str | None):
     """List all API keys."""
-    from .stores import ApiKeyStore
+    from .stores import get_api_key_store
 
-    store = ApiKeyStore("data/api_keys.db")
-    keys = store.list_keys()
+    store = get_api_key_store()
+    keys = store.list_keys(client_id=client_id)
 
     if not keys:
         console.print("[dim]No API keys found.[/]")
@@ -999,6 +1014,7 @@ def apikey_list():
 
     table = Table(title="API Keys", box=box.ROUNDED)
     table.add_column("Key ID", style="cyan")
+    table.add_column("Client ID", style="dim")
     table.add_column("Name")
     table.add_column("Scopes")
     table.add_column("Active", justify="center")
@@ -1010,6 +1026,7 @@ def apikey_list():
         last_used = key.last_used.strftime("%Y-%m-%d %H:%M") if key.last_used else "[dim]Never[/]"
         table.add_row(
             key.key_id,
+            key.client_id[:16] + "..." if len(key.client_id) > 16 else key.client_id,
             key.name,
             ", ".join(key.scopes),
             active,
@@ -1025,9 +1042,9 @@ def apikey_list():
 @click.confirmation_option(prompt="Are you sure you want to revoke this API key?")
 def apikey_revoke(key_id: str):
     """Revoke an API key."""
-    from .stores import ApiKeyStore
+    from .stores import get_api_key_store
 
-    store = ApiKeyStore("data/api_keys.db")
+    store = get_api_key_store()
 
     # Check if key exists first
     existing = store.get_key(key_id)

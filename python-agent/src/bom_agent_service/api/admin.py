@@ -10,7 +10,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Header
 from pydantic import BaseModel
 
-from ..stores import ApiKeyStore, ClientStore
+from ..stores import get_api_key_store, get_client_store
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -70,8 +70,8 @@ async def admin_status():
 
     Returns whether the admin API is configured and basic stats.
     """
-    client_store = ClientStore()
-    api_key_store = ApiKeyStore()
+    client_store = get_client_store()
+    api_key_store = get_api_key_store()
 
     clients = client_store.list_clients()
     keys = api_key_store.list_keys()
@@ -100,8 +100,8 @@ async def bootstrap_demo(
     """
     verify_admin_key(x_admin_key)
 
-    client_store = ClientStore()
-    api_key_store = ApiKeyStore()
+    client_store = get_client_store()
+    api_key_store = get_api_key_store()
 
     # Check if client with this slug already exists
     existing = client_store.get_client_by_slug(request.client_slug)
@@ -155,8 +155,8 @@ async def reset_demo(
     """
     verify_admin_key(x_admin_key)
 
-    client_store = ClientStore()
-    api_key_store = ApiKeyStore()
+    client_store = get_client_store()
+    api_key_store = get_api_key_store()
 
     # Find demo client
     demo_client = client_store.get_client_by_slug("demo")

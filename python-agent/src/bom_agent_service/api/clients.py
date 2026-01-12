@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ..stores import ClientStore
+from ..stores import get_client_store
 
 router = APIRouter(prefix="/clients", tags=["clients"])
 
@@ -25,10 +25,6 @@ class ClientCreateRequest(BaseModel):
     slug: str
     oidc_issuer: Optional[str] = None
     oidc_audience: Optional[str] = None
-
-
-def get_client_store() -> ClientStore:
-    return ClientStore()
 
 
 @router.get("", response_model=list[ClientResponse])

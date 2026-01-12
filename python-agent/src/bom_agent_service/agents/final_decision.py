@@ -1,5 +1,7 @@
-"""Final Decision Agent - Aggregates sub-agent outputs and makes final purchasing decisions."""
+"""Final Decision Agent - Synthesizes specialist analyses into judicial-style decisions."""
 
+import logging
+import uuid
 from typing import Literal, Optional
 from crewai import Agent, Task, Crew
 from pydantic import BaseModel, Field
@@ -7,63 +9,82 @@ from pydantic import BaseModel, Field
 from ..models import (
     BOMLineItem,
     ProjectContext,
-    AgentDecision,
-    DecisionStatus,
+    SpecialistAgentResult,
+    FinalDecisionReport,
+    PartVerdict,
+    ProjectSummary,
+    FollowUpItem,
 )
-from .memory_config import get_llm
+from .memory_config import get_reasoning_llm
+from ..utils.rich_logger import console, log_final_report
+
+logger = logging.getLogger(__name__)
 
 
-# Pydantic models for structured output
-class FinalPartDecision(BaseModel):
-    """Final decision for a single part after aggregating all agent inputs."""
-    mpn: str = Field(description="The manufacturer part number")
-    decision: Literal["APPROVED", "REJECTED"] = Field(description="Final decision on whether to purchase this part")
-
-    # Selected sourcing details (only if approved)
-    selected_supplier_id: Optional[str] = Field(default=None, description="ID of the selected supplier")
-    selected_supplier_name: Optional[str] = Field(default=None, description="Name of the selected supplier")
-    final_quantity: int = Field(description="Final quantity to order")
-    final_unit_price: float = Field(description="Final unit price")
-    final_line_cost: float = Field(description="Final total cost for this line item")
-
-    # Aggregated assessment
-    engineering_summary: str = Field(description="Summary of engineering assessment")
-    sourcing_summary: str = Field(description="Summary of sourcing assessment")
-    finance_summary: str = Field(description="Summary of finance assessment")
-
-    # Final rationale
-    reasoning: str = Field(description="Comprehensive rationale explaining the final decision, synthesizing all agent inputs")
-    risk_factors: list[str] = Field(default_factory=list, description="Key risk factors identified across all assessments")
-    recommendations: list[str] = Field(default_factory=list, description="Recommendations for this purchase")
+# Pydantic models for structured LLM output
+class LLMPartVerdict(BaseModel):
+    """LLM output for a single part verdict."""
+    mpn: str = Field(description="Manufacturer part number")
+    verdict: Literal["APPROVED", "REJECTED"] = Field(description="Final verdict")
+    selected_supplier_id: Optional[str] = Field(default=None, description="Selected supplier ID if approved")
+    selected_supplier_name: Optional[str] = Field(default=None, description="Selected supplier name if approved")
+    final_quantity: int = Field(default=0, description="Final quantity to order")
+    final_unit_price: float = Field(default=0.0, description="Final unit price")
+    final_line_cost: float = Field(default=0.0, description="Final line cost")
+    engineering_findings: str = Field(description="Summary of engineering findings")
+    sourcing_findings: str = Field(description="Summary of sourcing findings")
+    finance_findings: str = Field(description="Summary of finance findings")
+    points_of_agreement: list[str] = Field(default_factory=list, description="Where agents agreed")
+    points_of_conflict: list[str] = Field(default_factory=list, description="Where agents disagreed")
+    resolution_rationale: str = Field(description="Detailed rationale for the decision")
+    risk_factors: list[str] = Field(default_factory=list, description="Risk factors")
+    mitigations: list[str] = Field(default_factory=list, description="Risk mitigations")
+    conditions: list[str] = Field(default_factory=list, description="Conditions for approval")
 
 
-class FinalDecisionResult(BaseModel):
-    """Complete result from final decision agent."""
-    decisions: list[FinalPartDecision] = Field(description="Final decisions for each part")
-    total_approved_spend: float = Field(description="Total spend for all approved items")
-    total_items_approved: int = Field(description="Number of items approved for purchase")
-    total_items_rejected: int = Field(description="Number of items rejected")
-    overall_assessment: str = Field(description="Overall assessment of the BOM and purchasing recommendations")
+class LLMProjectSummary(BaseModel):
+    """LLM output for project summary."""
+    overall_risk_level: Literal["LOW", "MEDIUM", "HIGH"] = Field(description="Overall risk assessment")
+    key_risks: list[str] = Field(default_factory=list, description="Key risks")
+    strategic_recommendations: list[str] = Field(default_factory=list, description="Strategic recommendations")
+
+
+class LLMFollowUpItem(BaseModel):
+    """LLM output for follow-up item."""
+    priority: Literal["HIGH", "MEDIUM", "LOW"] = Field(description="Priority level")
+    category: str = Field(description="Category: engineering, sourcing, finance, compliance")
+    description: str = Field(description="Follow-up description")
+    related_mpns: list[str] = Field(default_factory=list, description="Related MPNs")
+
+
+class LLMFinalDecisionOutput(BaseModel):
+    """Complete LLM output for final decision."""
+    executive_summary: str = Field(description="2-3 paragraph executive summary")
+    verdicts: list[LLMPartVerdict] = Field(description="Verdicts for each part")
+    project_summary: LLMProjectSummary = Field(description="Project-level summary")
+    follow_up_notes: list[LLMFollowUpItem] = Field(default_factory=list, description="Follow-up items")
 
 
 class FinalDecisionAgent:
     """
-    Aggregates outputs from Engineering, Sourcing, and Finance agents
-    to make final purchasing decisions for each BOM item.
+    Synthesizes specialist agent analyses into comprehensive judicial-style decisions.
 
-    This agent synthesizes all perspectives and provides a comprehensive
-    rationale for each decision.
+    Uses a reasoning model (gpt-4o) to produce structured output with
+    detailed rationale for each decision.
     """
 
     def __init__(self):
-        """Initialize agent with LLM."""
-        self._llm = get_llm()
+        """Initialize agent with reasoning LLM for structured output."""
+        self._llm = get_reasoning_llm()
 
         self.agent = Agent(
-            role="Senior Procurement Manager",
-            goal="Make final purchasing decisions by synthesizing engineering, sourcing, and finance assessments",
-            backstory="""You are a senior procurement manager who synthesizes engineering,
-            sourcing, and finance assessments to make final purchasing decisions.""",
+            role="Senior Procurement Decision Authority",
+            goal="Synthesize all specialist analyses and render final purchasing decisions with comprehensive judicial-style reasoning",
+            backstory="""You are the senior procurement authority responsible for rendering
+            final decisions on all BOM purchases. Like a constitutional judge, you must
+            carefully weigh all evidence from engineering, sourcing, and finance specialists,
+            identify areas of agreement and conflict, and provide comprehensive written
+            rationale for each decision. Your decisions must be defensible and traceable.""",
             llm=self._llm,
             verbose=False,
             allow_delegation=False,
@@ -73,176 +94,231 @@ class FinalDecisionAgent:
         self,
         line_items: list[BOMLineItem],
         project_context: ProjectContext,
-        engineering_decisions: dict[str, AgentDecision],
-        sourcing_decisions: dict[str, AgentDecision],
-        finance_decisions: dict[str, AgentDecision],
-    ) -> dict[str, AgentDecision]:
+        engineering_result: SpecialistAgentResult,
+        sourcing_result: SpecialistAgentResult,
+        finance_result: SpecialistAgentResult,
+    ) -> FinalDecisionReport:
         """
-        Make final decisions for all line items based on sub-agent outputs (async).
+        Synthesize specialist analyses into final decisions.
 
-        Returns a dict mapping MPN to final AgentDecision.
-        Raises ValueError if the LLM returns an invalid response.
+        Args:
+            line_items: BOM line items to decide on
+            project_context: Project context and constraints
+            engineering_result: Engineering agent's prose analysis
+            sourcing_result: Sourcing agent's prose analysis
+            finance_result: Finance agent's prose analysis
+
+        Returns FinalDecisionReport with comprehensive judicial-style reasoning.
         """
         if not line_items:
-            return {}
+            return FinalDecisionReport(
+                report_id=str(uuid.uuid4()),
+                project_id=project_context.project_id,
+                executive_summary="No parts to evaluate.",
+                verdicts=[],
+                project_summary=ProjectSummary(
+                    total_parts=0,
+                    approved_count=0,
+                    rejected_count=0,
+                    total_estimated_spend=0.0,
+                    budget_remaining=project_context.budget_total,
+                    overall_risk_level="LOW",
+                    key_risks=[],
+                    strategic_recommendations=[],
+                ),
+                follow_up_notes=[],
+                total_approved=0,
+                total_rejected=0,
+                total_spend=0.0,
+                budget_utilization_pct=0.0,
+            )
 
-        # Build context for all parts with all agent decisions
-        parts_context = []
-        for item in line_items:
-            eng = engineering_decisions.get(item.mpn)
-            src = sourcing_decisions.get(item.mpn)
-            fin = finance_decisions.get(item.mpn)
-            parts_context.append(self._build_part_context(item, eng, src, fin))
-
-        all_parts_text = "\n\n" + "="*60 + "\n\n".join(parts_context)
         mpn_list = [item.mpn for item in line_items]
 
+        # Build the comprehensive context with all specialist analyses
+        parts_overview = self._build_parts_overview(line_items)
+
         task = Task(
-            description=f"""As the Senior Procurement Manager, review ALL agent assessments and make FINAL purchasing decisions.
+            description=f"""As the Senior Procurement Decision Authority, you must render FINAL decisions on all BOM parts.
 
-## Project Overview
-- Project: {project_context.project_name or 'Unnamed Project'}
-- Budget: ${project_context.budget_total:,.2f}
-- Deadline: {project_context.deadline or 'Not specified'}
-- Product Type: {project_context.product_type.value}
-- Compliance Standards: {', '.join(project_context.compliance.standards) or 'None specified'}
+## PROJECT CONTEXT
 
----
-
-## AGENT ASSESSMENTS FOR EACH PART
-{all_parts_text}
+- **Project**: {project_context.project_name or project_context.project_id}
+- **Budget**: ${project_context.budget_total:,.2f}
+- **Deadline**: {project_context.deadline or 'Not specified'}
+- **Product Type**: {project_context.product_type.value}
+- **Compliance Standards**: {', '.join(project_context.compliance.standards) or 'None specified'}
+- **Quality Class**: {project_context.compliance.quality_class}
 
 ---
 
-## YOUR TASK
+## PARTS TO DECIDE
 
-For EACH part, you must:
+{parts_overview}
 
-1. **Review all three agent assessments** (Engineering, Sourcing, Finance)
-2. **Identify any conflicts or concerns** across the assessments
-3. **Make a FINAL decision** (APPROVED or REJECTED)
-4. **If APPROVED**: Select the best supplier, quantity, and price
-5. **Provide comprehensive reasoning** that synthesizes all inputs
+---
 
-Your reasoning MUST:
-- Reference specific points from each agent's assessment
-- Explain how you weighed conflicting recommendations
-- Justify your supplier/quantity selection
-- Identify any residual risks or recommendations
+## ENGINEERING SPECIALIST ANALYSIS
 
-Be thorough in your rationale - these decisions need to be defensible and traceable.
+{engineering_result.analysis_notes}
 
-You MUST provide a final decision for every part: {', '.join(mpn_list)}""",
-            expected_output="Final purchasing decisions for each part with comprehensive rationale synthesizing all agent inputs",
+**Key Engineering Concerns:**
+{chr(10).join('- ' + c for c in engineering_result.key_concerns) if engineering_result.key_concerns else 'None flagged'}
+
+---
+
+## SOURCING SPECIALIST ANALYSIS
+
+{sourcing_result.analysis_notes}
+
+**Key Sourcing Concerns:**
+{chr(10).join('- ' + c for c in sourcing_result.key_concerns) if sourcing_result.key_concerns else 'None flagged'}
+
+---
+
+## FINANCE SPECIALIST ANALYSIS
+
+{finance_result.analysis_notes}
+
+**Key Finance Concerns:**
+{chr(10).join('- ' + c for c in finance_result.key_concerns) if finance_result.key_concerns else 'None flagged'}
+
+---
+
+## YOUR MANDATE
+
+You must render a FINAL DECISION for each part: {', '.join(mpn_list)}
+
+For each part, you must:
+
+1. **Extract Key Findings** from each specialist's analysis
+2. **Identify Agreement** - where all specialists aligned
+3. **Identify Conflicts** - where specialists disagreed
+4. **Resolve Conflicts** - explain your reasoning for how you weighed competing concerns
+5. **Render Verdict** - APPROVED or REJECTED with full justification
+
+If APPROVED, you must specify:
+- Selected supplier (ID and name)
+- Final quantity to order
+- Final unit price
+- Final line cost
+
+Your rationale must be:
+- **Comprehensive** - reference specific points from each specialist
+- **Defensible** - explain the logic behind your decision
+- **Traceable** - someone reading this should understand exactly why each decision was made
+
+Also provide:
+- **Executive Summary** (2-3 paragraphs) covering the overall BOM evaluation
+- **Project Summary** with overall risk assessment and strategic recommendations
+- **Follow-Up Items** for any actions that need attention after this review""",
+            expected_output="Complete final decision report with judicial-style reasoning for each part",
             agent=self.agent,
-            output_pydantic=FinalDecisionResult,
+            output_pydantic=LLMFinalDecisionOutput,
         )
 
         crew = Crew(
             agents=[self.agent],
             tasks=[task],
-            verbose=False,
+            verbose=True,
         )
+
+        # Log request
+        logger.info("=" * 80)
+        logger.info("FINAL DECISION AGENT - LLM REQUEST")
+        logger.info("=" * 80)
+        logger.info(f"PROMPT:\n{task.description}")
+        logger.info("=" * 80)
 
         result = await crew.kickoff_async()
 
-        # Access the structured pydantic output
+        # Log response
+        logger.info("=" * 80)
+        logger.info("FINAL DECISION AGENT - LLM RESPONSE")
+        logger.info("=" * 80)
+        logger.info(f"RAW RESPONSE:\n{result.raw}")
+        logger.info("=" * 80)
+
+        # Process structured output
         if not result.pydantic:
             raise ValueError(f"FinalDecisionAgent: LLM did not return structured output. Raw: {result.raw[:500] if result.raw else 'EMPTY'}")
 
-        batch_result: FinalDecisionResult = result.pydantic
+        llm_output: LLMFinalDecisionOutput = result.pydantic
 
-        # Convert to AgentDecision dict
-        decisions = {}
-        for part_decision in batch_result.decisions:
-            status = DecisionStatus.APPROVED if part_decision.decision == "APPROVED" else DecisionStatus.REJECTED
+        # Convert to FinalDecisionReport
+        verdicts = []
+        total_spend = 0.0
 
-            decisions[part_decision.mpn] = AgentDecision(
-                agent_name="FinalDecisionAgent",
-                status=status,
-                reasoning=part_decision.reasoning,
-                output_data={
-                    "selected_supplier_id": part_decision.selected_supplier_id,
-                    "selected_supplier_name": part_decision.selected_supplier_name,
-                    "final_quantity": part_decision.final_quantity,
-                    "final_unit_price": part_decision.final_unit_price,
-                    "final_line_cost": part_decision.final_line_cost,
-                    "engineering_summary": part_decision.engineering_summary,
-                    "sourcing_summary": part_decision.sourcing_summary,
-                    "finance_summary": part_decision.finance_summary,
-                    "risk_factors": part_decision.risk_factors,
-                    "recommendations": part_decision.recommendations,
-                    "total_approved_spend": batch_result.total_approved_spend,
-                    "overall_assessment": batch_result.overall_assessment,
-                },
-                references=[],
+        for llm_verdict in llm_output.verdicts:
+            verdict = PartVerdict(
+                mpn=llm_verdict.mpn,
+                verdict=llm_verdict.verdict,
+                selected_supplier_id=llm_verdict.selected_supplier_id,
+                selected_supplier_name=llm_verdict.selected_supplier_name,
+                final_quantity=llm_verdict.final_quantity,
+                final_unit_price=llm_verdict.final_unit_price,
+                final_line_cost=llm_verdict.final_line_cost,
+                engineering_findings=llm_verdict.engineering_findings,
+                sourcing_findings=llm_verdict.sourcing_findings,
+                finance_findings=llm_verdict.finance_findings,
+                points_of_agreement=llm_verdict.points_of_agreement,
+                points_of_conflict=llm_verdict.points_of_conflict,
+                resolution_rationale=llm_verdict.resolution_rationale,
+                risk_factors=llm_verdict.risk_factors,
+                mitigations=llm_verdict.mitigations,
+                conditions=llm_verdict.conditions,
             )
+            verdicts.append(verdict)
+            if verdict.verdict == "APPROVED":
+                total_spend += verdict.final_line_cost
 
-        # Verify all MPNs have decisions
-        missing_mpns = set(mpn_list) - set(decisions.keys())
-        if missing_mpns:
-            raise ValueError(f"FinalDecisionAgent: Missing decisions for MPNs: {missing_mpns}")
+        total_approved = sum(1 for v in verdicts if v.verdict == "APPROVED")
+        total_rejected = sum(1 for v in verdicts if v.verdict == "REJECTED")
 
-        return decisions
-
-    def _build_part_context(
-        self,
-        line_item: BOMLineItem,
-        eng_decision: Optional[AgentDecision],
-        src_decision: Optional[AgentDecision],
-        fin_decision: Optional[AgentDecision],
-    ) -> str:
-        """Build context string for a single part with all agent decisions."""
-        lines = [
-            f"## Part: {line_item.mpn}",
-            f"**Description:** {line_item.description}",
-            f"**Manufacturer:** {line_item.manufacturer}",
-            f"**Quantity Needed:** {line_item.quantity}",
-            "",
+        follow_up_notes = [
+            FollowUpItem(
+                priority=item.priority,
+                category=item.category,
+                description=item.description,
+                related_mpns=item.related_mpns,
+            )
+            for item in llm_output.follow_up_notes
         ]
 
-        # Engineering Assessment
-        lines.append("### Engineering Assessment")
-        if eng_decision:
-            lines.extend([
-                f"- **Decision:** {eng_decision.status.value}",
-                f"- **Reasoning:** {eng_decision.reasoning}",
-            ])
-            if eng_decision.output_data.get("concerns"):
-                lines.append(f"- **Concerns:** {', '.join(eng_decision.output_data['concerns'])}")
-            if eng_decision.output_data.get("approved_alternates"):
-                lines.append(f"- **Approved Alternates:** {', '.join(eng_decision.output_data['approved_alternates'])}")
-        else:
-            lines.append("- **No engineering assessment available**")
-        lines.append("")
+        project_summary = ProjectSummary(
+            total_parts=len(line_items),
+            approved_count=total_approved,
+            rejected_count=total_rejected,
+            total_estimated_spend=total_spend,
+            budget_remaining=project_context.budget_total - total_spend,
+            overall_risk_level=llm_output.project_summary.overall_risk_level,
+            key_risks=llm_output.project_summary.key_risks,
+            strategic_recommendations=llm_output.project_summary.strategic_recommendations,
+        )
 
-        # Sourcing Assessment
-        lines.append("### Sourcing Assessment")
-        if src_decision:
-            lines.extend([
-                f"- **Decision:** {src_decision.status.value}",
-                f"- **Reasoning:** {src_decision.reasoning}",
-                f"- **Selected Supplier:** {src_decision.output_data.get('selected_supplier_name', 'N/A')} (ID: {src_decision.output_data.get('selected_supplier', 'N/A')})",
-                f"- **Unit Price:** ${src_decision.output_data.get('unit_price', 0):.4f}",
-                f"- **Lead Time:** {src_decision.output_data.get('lead_time_days', 'N/A')} days",
-                f"- **Risk Level:** {src_decision.output_data.get('risk_level', 'N/A')}",
-            ])
-        else:
-            lines.append("- **No sourcing assessment available**")
-        lines.append("")
+        budget_utilization = (total_spend / project_context.budget_total * 100) if project_context.budget_total > 0 else 0.0
 
-        # Finance Assessment
-        lines.append("### Finance Assessment")
-        if fin_decision:
-            lines.extend([
-                f"- **Decision:** {fin_decision.status.value}",
-                f"- **Reasoning:** {fin_decision.reasoning}",
-                f"- **Recommended Qty:** {fin_decision.output_data.get('recommended_qty', 'N/A')}",
-                f"- **Estimated Unit Price:** ${fin_decision.output_data.get('estimated_unit_price', 0):.4f}",
-                f"- **Estimated Line Cost:** ${fin_decision.output_data.get('estimated_line_cost', 0):.2f}",
-                f"- **Budget Impact:** {fin_decision.output_data.get('budget_impact', 'N/A')}",
-            ])
-        else:
-            lines.append("- **No finance assessment available**")
+        final_report = FinalDecisionReport(
+            report_id=str(uuid.uuid4()),
+            project_id=project_context.project_id,
+            executive_summary=llm_output.executive_summary,
+            verdicts=verdicts,
+            project_summary=project_summary,
+            follow_up_notes=follow_up_notes,
+            total_approved=total_approved,
+            total_rejected=total_rejected,
+            total_spend=total_spend,
+            budget_utilization_pct=budget_utilization,
+        )
 
+        # Log with rich formatting
+        log_final_report(final_report)
+
+        return final_report
+
+    def _build_parts_overview(self, line_items: list[BOMLineItem]) -> str:
+        """Build overview of parts being decided."""
+        lines = []
+        for item in line_items:
+            lines.append(f"- **{item.mpn}**: {item.description} (Qty: {item.quantity}, Mfg: {item.manufacturer})")
         return "\n".join(lines)

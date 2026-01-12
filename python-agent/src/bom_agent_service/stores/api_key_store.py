@@ -1,12 +1,15 @@
-"""API key store with SQLite persistence."""
+"""API key store with PostgreSQL persistence."""
 
 import hashlib
 import secrets
-import sqlite3
-from datetime import datetime
-from pathlib import Path
+from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import select, update
+from sqlalchemy.orm import Session
+
+from ..db import get_session
+from ..db.tables import ApiKeyTable
 from ..models import ApiKey
 
 
@@ -20,44 +23,61 @@ def _generate_key() -> str:
     return f"pbom_sk_{secrets.token_urlsafe(32)}"
 
 
+def _utc_now() -> datetime:
+    """Get current UTC time as timezone-aware datetime."""
+    return datetime.now(timezone.utc)
+
+
 class ApiKeyStore:
-    """Store for API keys with SQLite persistence."""
+    """Store for API keys with PostgreSQL persistence."""
 
-    def __init__(self, db_path: str = "data/api_keys.db"):
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._init_db()
+    def __init__(self, session: Optional[Session] = None):
+        """
+        Initialize store.
 
-    def _init_db(self) -> None:
-        """Initialize the database schema."""
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS api_keys (
-                    key_id TEXT PRIMARY KEY,
-                    hashed_key TEXT NOT NULL UNIQUE,
-                    client_id TEXT,
-                    name TEXT NOT NULL,
-                    scopes TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    last_used TEXT,
-                    is_active INTEGER DEFAULT 1
-                )
-            """)
-            # Add client_id column if it doesn't exist (migration)
-            try:
-                conn.execute("ALTER TABLE api_keys ADD COLUMN client_id TEXT")
-            except sqlite3.OperationalError:
-                pass  # Column already exists
-            conn.commit()
+        Args:
+            session: Optional SQLAlchemy session. If not provided,
+                     will create new sessions per operation.
+        """
+        self._session = session
 
-    def create_key(self, name: str, scopes: list[str] | None = None, client_id: str | None = None) -> tuple[ApiKey, str]:
+    def _get_session(self) -> Session:
+        """Get session - either injected or create new one."""
+        if self._session:
+            return self._session
+        return next(get_session())
+
+    def _close_session(self, session: Session) -> None:
+        """Close session if it was created by this store."""
+        if session is not self._session:
+            session.close()
+
+    def _row_to_api_key(self, row: ApiKeyTable) -> ApiKey:
+        """Convert database row to ApiKey model."""
+        return ApiKey(
+            key_id=row.key_id,
+            hashed_key=row.hashed_key,
+            client_id=row.client_id,
+            name=row.name,
+            scopes=row.scopes.split(",") if row.scopes else ["all"],
+            created_at=row.created_at,
+            last_used=row.last_used,
+            is_active=row.is_active,
+        )
+
+    def create_key(
+        self,
+        name: str,
+        client_id: str,
+        scopes: list[str] | None = None,
+    ) -> tuple[ApiKey, str]:
         """
         Create a new API key.
 
         Args:
             name: Human-readable name for the key
+            client_id: Client ID this key belongs to (required)
             scopes: List of permission scopes (defaults to ["all"])
-            client_id: Optional client ID this key belongs to
 
         Returns:
             Tuple of (ApiKey model, raw key string).
@@ -71,30 +91,27 @@ class ApiKeyStore:
 
         api_key = ApiKey(
             hashed_key=hashed_key,
+            client_id=client_id,
             name=name,
             scopes=scopes,
-            client_id=client_id,
         )
 
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                """
-                INSERT INTO api_keys (key_id, hashed_key, client_id, name, scopes, created_at, is_active)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    api_key.key_id,
-                    api_key.hashed_key,
-                    api_key.client_id,
-                    api_key.name,
-                    ",".join(api_key.scopes),
-                    api_key.created_at.isoformat(),
-                    1,
-                ),
+        session = self._get_session()
+        try:
+            row = ApiKeyTable(
+                key_id=api_key.key_id,
+                hashed_key=api_key.hashed_key,
+                client_id=api_key.client_id,
+                name=api_key.name,
+                scopes=",".join(api_key.scopes),
+                is_active=True,
             )
-            conn.commit()
-
-        return api_key, raw_key
+            session.add(row)
+            session.commit()
+            session.refresh(row)
+            return self._row_to_api_key(row), raw_key
+        finally:
+            self._close_session(session)
 
     def validate_key(self, raw_key: str) -> Optional[ApiKey]:
         """
@@ -105,38 +122,33 @@ class ApiKeyStore:
         """
         hashed_key = _hash_key(raw_key)
 
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                """
-                SELECT key_id, hashed_key, client_id, name, scopes, created_at, last_used, is_active
-                FROM api_keys
-                WHERE hashed_key = ? AND is_active = 1
-                """,
-                (hashed_key,),
+        session = self._get_session()
+        try:
+            stmt = select(ApiKeyTable).where(
+                ApiKeyTable.hashed_key == hashed_key,
+                ApiKeyTable.is_active == True,  # noqa: E712
             )
-            row = cursor.fetchone()
+            row = session.execute(stmt).scalar_one_or_none()
 
             if not row:
                 return None
 
             # Update last_used
-            now = datetime.utcnow()
-            conn.execute(
-                "UPDATE api_keys SET last_used = ? WHERE key_id = ?",
-                (now.isoformat(), row[0]),
+            now = _utc_now()
+            update_stmt = (
+                update(ApiKeyTable)
+                .where(ApiKeyTable.key_id == row.key_id)
+                .values(last_used=now)
             )
-            conn.commit()
+            session.execute(update_stmt)
+            session.commit()
 
-            return ApiKey(
-                key_id=row[0],
-                hashed_key=row[1],
-                client_id=row[2],
-                name=row[3],
-                scopes=row[4].split(",") if row[4] else ["all"],
-                created_at=datetime.fromisoformat(row[5]),
-                last_used=now,
-                is_active=bool(row[7]),
-            )
+            # Return with updated last_used
+            api_key = self._row_to_api_key(row)
+            api_key.last_used = now
+            return api_key
+        finally:
+            self._close_session(session)
 
     def revoke_key(self, key_id: str) -> bool:
         """
@@ -144,13 +156,18 @@ class ApiKeyStore:
 
         Returns True if the key was found and revoked, False otherwise.
         """
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "UPDATE api_keys SET is_active = 0 WHERE key_id = ?",
-                (key_id,),
+        session = self._get_session()
+        try:
+            stmt = (
+                update(ApiKeyTable)
+                .where(ApiKeyTable.key_id == key_id)
+                .values(is_active=False)
             )
-            conn.commit()
-            return cursor.rowcount > 0
+            result = session.execute(stmt)
+            session.commit()
+            return result.rowcount > 0
+        finally:
+            self._close_session(session)
 
     def list_keys(self, client_id: str | None = None) -> list[ApiKey]:
         """
@@ -158,65 +175,25 @@ class ApiKeyStore:
 
         Note: Returns ApiKey objects with hashed_key field (not the raw key).
         """
-        with sqlite3.connect(self.db_path) as conn:
+        session = self._get_session()
+        try:
+            stmt = select(ApiKeyTable).order_by(ApiKeyTable.created_at.desc())
             if client_id:
-                cursor = conn.execute(
-                    """
-                    SELECT key_id, hashed_key, client_id, name, scopes, created_at, last_used, is_active
-                    FROM api_keys
-                    WHERE client_id = ?
-                    ORDER BY created_at DESC
-                    """,
-                    (client_id,),
-                )
-            else:
-                cursor = conn.execute(
-                    """
-                    SELECT key_id, hashed_key, client_id, name, scopes, created_at, last_used, is_active
-                    FROM api_keys
-                    ORDER BY created_at DESC
-                    """
-                )
+                stmt = stmt.where(ApiKeyTable.client_id == client_id)
 
-            keys = []
-            for row in cursor.fetchall():
-                keys.append(
-                    ApiKey(
-                        key_id=row[0],
-                        hashed_key=row[1],
-                        client_id=row[2],
-                        name=row[3],
-                        scopes=row[4].split(",") if row[4] else ["all"],
-                        created_at=datetime.fromisoformat(row[5]),
-                        last_used=datetime.fromisoformat(row[6]) if row[6] else None,
-                        is_active=bool(row[7]),
-                    )
-                )
-            return keys
+            rows = session.execute(stmt).scalars().all()
+            return [self._row_to_api_key(row) for row in rows]
+        finally:
+            self._close_session(session)
 
     def get_key(self, key_id: str) -> Optional[ApiKey]:
         """Get a specific API key by its ID."""
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                """
-                SELECT key_id, hashed_key, client_id, name, scopes, created_at, last_used, is_active
-                FROM api_keys
-                WHERE key_id = ?
-                """,
-                (key_id,),
-            )
-            row = cursor.fetchone()
-
-            if not row:
-                return None
-
-            return ApiKey(
-                key_id=row[0],
-                hashed_key=row[1],
-                client_id=row[2],
-                name=row[3],
-                scopes=row[4].split(",") if row[4] else ["all"],
-                created_at=datetime.fromisoformat(row[5]),
-                last_used=datetime.fromisoformat(row[6]) if row[6] else None,
-                is_active=bool(row[7]),
-            )
+        session = self._get_session()
+        try:
+            stmt = select(ApiKeyTable).where(ApiKeyTable.key_id == key_id)
+            row = session.execute(stmt).scalar_one_or_none()
+            if row:
+                return self._row_to_api_key(row)
+            return None
+        finally:
+            self._close_session(session)

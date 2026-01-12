@@ -8,7 +8,7 @@ This is a multi-agent BOM (Bill of Materials) processing service built with Crew
 
 ```bash
 # Start the API server
-uv run uvicorn bom_agent_service.main:app --reload
+uv run sourcing-server
 
 # In another terminal, process a BOM
 uv run sourcing process sample_bom.csv --intake project_intake.yaml

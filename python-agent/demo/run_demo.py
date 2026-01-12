@@ -8,13 +8,14 @@ Run with: uv run python demo/run_demo.py
 import subprocess
 import sys
 import time
+import threading
 from pathlib import Path
 
+import httpx
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
-from rich.text import Text
-from rich.markdown import Markdown
+from rich.progress import Progress, SpinnerColumn, TextColumn, TimeElapsedColumn
 from rich import box
 
 console = Console()
@@ -28,7 +29,7 @@ INTAKE_FILE = DEMO_DIR / "neurolink_intake.yaml"
 def run_cmd(cmd: str, capture: bool = False, show_cmd: bool = True) -> str:
     """Run a CLI command and optionally capture output."""
     if show_cmd:
-        console.print(f"\n[green]$[/green] [white]{cmd}[/white]\n")
+        console.print(f"\n[green]$[/green] [bold]{cmd}[/bold]\n")
 
     if capture:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -36,6 +37,45 @@ def run_cmd(cmd: str, capture: bool = False, show_cmd: bool = True) -> str:
     else:
         subprocess.run(cmd, shell=True)
         return ""
+
+
+def run_cmd_with_spinner(cmd: str, message: str, show_cmd: bool = True) -> tuple[str, float]:
+    """Run a CLI command with a Rich spinner, returning output and elapsed time."""
+    if show_cmd:
+        console.print(f"\n[green]$[/green] [bold]{cmd}[/bold]\n")
+
+    result_holder = {"stdout": "", "stderr": "", "done": False}
+
+    def run_in_thread():
+        result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+        result_holder["stdout"] = result.stdout
+        result_holder["stderr"] = result.stderr
+        result_holder["done"] = True
+
+    thread = threading.Thread(target=run_in_thread)
+    start_time = time.time()
+    thread.start()
+
+    # Show spinner while command runs
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        progress.add_task(message, total=None)
+        while not result_holder["done"]:
+            time.sleep(0.1)
+
+    elapsed = time.time() - start_time
+    output = result_holder["stdout"] + result_holder["stderr"]
+
+    # Print the output after spinner completes
+    if output.strip():
+        console.print(output)
+
+    return output, elapsed
 
 
 def wait_for_user():
@@ -50,7 +90,7 @@ def banner(title: str):
     """Display a banner."""
     console.print()
     console.print(Panel(
-        f"[bold white]{title}[/bold white]",
+        f"[bold]{title}[/bold]",
         border_style="blue",
         padding=(0, 2),
     ))
@@ -80,7 +120,6 @@ def detail(text: str):
 
 def check_server() -> bool:
     """Check if API server is running."""
-    import httpx
     try:
         resp = httpx.get("http://localhost:8000/health", timeout=2.0)
         return resp.status_code == 200
@@ -96,23 +135,24 @@ def main():
     # =========================================================================
     banner("🧠 NeuroLink Mini - BOM Agent System Demo")
 
-    console.print("[white]Welcome to the BOM Agent Service demonstration![/white]")
+    console.print("Welcome to the BOM Agent Service demonstration!")
     console.print()
     console.print("This demo walks through a multi-agent system for processing Bills of Materials.")
-    console.print("We'll be sourcing components for a [bold]portable brain-computer interface[/bold] device.")
+    console.print("We'll source components for a [bold]portable brain-computer interface[/bold] device.")
     console.print()
 
     console.print("[cyan]What you'll see:[/cyan]")
-    console.print("  1. How the CLI interacts with the FastAPI backend")
-    console.print("  2. Three AI agents reviewing parts in PARALLEL")
-    console.print("  3. Final Decision agent aggregating all inputs")
-    console.print("  4. Knowledge base management for parts and suppliers")
-    console.print("  5. Full audit trail with agent reasoning")
+    console.print("  1. System architecture and authentication options")
+    console.print("  2. x402 payment protocol for pay-per-use API access")
+    console.print("  3. Four AI agents reviewing parts (3 in PARALLEL)")
+    console.print("  4. Market intelligence gathering via web scraping")
+    console.print("  5. Knowledge base management for parts and suppliers")
+    console.print("  6. Full audit trail with agent reasoning")
     console.print()
 
     console.print("[yellow]Prerequisites:[/yellow]")
-    console.print("  • API server running: [white]uv run sourcing-server[/white]")
-    console.print("  • OPENAI_API_KEY environment variable set")
+    console.print("  • API server running: [bold]uv run sourcing-server[/bold]")
+    console.print("  • LLM API key (OPENAI_API_KEY or ANTHROPIC_API_KEY)")
     console.print()
 
     # Check server
@@ -142,21 +182,25 @@ def main():
                           ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    FastAPI Server (:8000)                       │
-│   /projects  /knowledge  /v1/chat/completions  /health          │
+│        /projects  /knowledge  /health  /v1/chat/completions     │
+├─────────────────────────────────────────────────────────────────┤
+│    Auth Chain: API Key → JWT/OIDC → x402 Payment → Anonymous    │
 └─────────────────────────┬───────────────────────────────────────┘
                           │
-          ┌───────────────┼───────────────┐
-          ▼               ▼               ▼
-  ┌───────────────┐ ┌───────────────┐ ┌───────────────┐
-  │ ProjectStore  │ │ OffersStore   │ │OrgKnowledge   │
-  │   (SQLite)    │ │  (in-memory)  │ │   Store       │
-  └───────────────┘ └───────────────┘ └───────────────┘
+          ┌───────────────┼───────────────┬───────────────┐
+          ▼               ▼               ▼               ▼
+  ┌─────────────┐   ┌───────────┐  ┌──────────────┐ ┌───────────┐
+  │ProjectStore │   │OffersStore│  │OrgKnowledge  │ │MarketIntel│
+  │  (SQLite/   │   │(in-memory)│  │    Store     │ │   Store   │
+  │  Postgres)  │   │           │  │              │ │           │
+  └─────────────┘   └───────────┘  └──────────────┘ └───────────┘
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────────┐
 │                    CrewAI Flow Engine                           │
-│   [Engineering | Sourcing | Finance] → FinalDecisionAgent       │
-│         (parallel)                    (aggregates all)          │
+│  Intake → Enrich → Market Intel (Apify) →                       │
+│  [Engineering | Sourcing | Finance] (parallel LLM) →            │
+│  Final Decision (LLM) → Complete                                │
 └─────────────────────────────────────────────────────────────────┘
 """
     console.print(arch_diagram)
@@ -167,9 +211,79 @@ def main():
     wait_for_user()
 
     # =========================================================================
-    # STEP 2: Health Check
+    # STEP 2: x402 Payment Protocol
     # =========================================================================
-    banner("Step 2: API Health Check")
+    banner("Step 2: x402 Payment Protocol")
+
+    explain("The API supports the x402 payment protocol for pay-per-use access.")
+    detail("This enables permissionless API monetization via cryptocurrency micropayments.")
+    console.print()
+
+    section("How x402 Works")
+
+    x402_diagram = """
+┌─────────────────┐                    ┌─────────────────┐
+│   Client App    │                    │  BOM Agent API  │
+│  (with wallet)  │                    │                 │
+└────────┬────────┘                    └────────┬────────┘
+         │                                      │
+         │  1. POST /projects/process           │
+         │─────────────────────────────────────>│
+         │                                      │
+         │  2. 402 Payment Required             │
+         │     X-Payment-Required: {price, ...} │
+         │<─────────────────────────────────────│
+         │                                      │
+         │  3. Sign payment with wallet         │
+         │                                      │
+         │  4. Retry with X-Payment header      │
+         │─────────────────────────────────────>│
+         │                                      │
+         │     ┌──────────────────────────────┐ │
+         │     │  5. Verify with Facilitator  │ │
+         │     │  6. Settle payment (USDC)    │ │
+         │     │  7. Create ephemeral client  │ │
+         │     └──────────────────────────────┘ │
+         │                                      │
+         │  8. 200 OK + Results                 │
+         │<─────────────────────────────────────│
+"""
+    console.print(x402_diagram)
+
+    section("Authentication Chain")
+
+    auth_table = Table(box=box.SIMPLE)
+    auth_table.add_column("Priority", style="cyan")
+    auth_table.add_column("Method", style="bold")
+    auth_table.add_column("Use Case", style="dim")
+    auth_table.add_row("1", "API Key", "Server-to-server, CLI access")
+    auth_table.add_row("2", "JWT/OIDC", "Enterprise SSO integration")
+    auth_table.add_row("3", "x402 Payment", "Pay-per-use, permissionless access")
+    auth_table.add_row("4", "Anonymous", "Development mode only")
+    console.print(auth_table)
+
+    console.print()
+    explain("Pricing model:")
+    detail("• Base price: $0.05 per project submission")
+    detail("• Per-item price: $0.005 per BOM line item")
+    detail("• Network: Base Sepolia (testnet) or Base mainnet")
+    detail("• Payment: USDC stablecoin")
+
+    console.print()
+    section("Environment Variables for x402")
+
+    console.print("  [dim]AUTH_X402_ENABLED=true[/dim]")
+    console.print("  [dim]AUTH_X402_PAY_TO_ADDRESS=0x...[/dim]  [yellow]# Your wallet[/yellow]")
+    console.print("  [dim]AUTH_X402_NETWORK=base-sepolia[/dim]")
+    console.print("  [dim]AUTH_X402_BASE_PRICE=0.05[/dim]")
+    console.print("  [dim]AUTH_X402_PER_ITEM_PRICE=0.005[/dim]")
+
+    wait_for_user()
+
+    # =========================================================================
+    # STEP 3: Health Check
+    # =========================================================================
+    banner("Step 3: API Health Check")
 
     explain("First, let's verify the API server is running.")
     detail("The CLI always checks /health before making requests.")
@@ -184,9 +298,9 @@ def main():
     wait_for_user()
 
     # =========================================================================
-    # STEP 3: Knowledge Base - Suppliers
+    # STEP 4: Knowledge Base - Suppliers
     # =========================================================================
-    banner("Step 3: Knowledge Base - Suppliers")
+    banner("Step 4: Knowledge Base - Suppliers")
 
     explain("The system maintains organizational knowledge about suppliers.")
     detail("This includes trust levels, on-time rates, and quality metrics.")
@@ -204,9 +318,9 @@ def main():
     wait_for_user()
 
     # =========================================================================
-    # STEP 4: Knowledge Base - Parts
+    # STEP 5: Knowledge Base - Parts
     # =========================================================================
-    banner("Step 4: Knowledge Base - Parts")
+    banner("Step 5: Knowledge Base - Parts")
 
     explain("The system also tracks knowledge about specific parts.")
     detail("Parts can be banned, have approved alternates, or track failure history.")
@@ -224,9 +338,9 @@ def main():
     wait_for_user()
 
     # =========================================================================
-    # STEP 5: The Project - NeuroLink Mini
+    # STEP 6: The Project - NeuroLink Mini
     # =========================================================================
-    banner("Step 5: The Project - NeuroLink Mini")
+    banner("Step 6: The Project - NeuroLink Mini")
 
     explain("We're sourcing parts for a portable brain-computer interface device.")
     detail("This is a medical-grade 8-channel neural signal acquisition unit.")
@@ -236,7 +350,7 @@ def main():
 
     device_table = Table(box=box.SIMPLE)
     device_table.add_column("Property", style="cyan")
-    device_table.add_column("Value", style="white")
+    device_table.add_column("Value", style="bold")
     device_table.add_row("Product", "NeuroLink Mini v1.0")
     device_table.add_row("Purpose", "Capture brain signals for BCI research")
     device_table.add_row("Key ICs", "ADS1299 (ADC), STM32H743 (MCU), INA333 (Amp)")
@@ -246,7 +360,7 @@ def main():
 
     req_table = Table(box=box.SIMPLE)
     req_table.add_column("Requirement", style="cyan")
-    req_table.add_column("Value", style="white")
+    req_table.add_column("Value", style="bold")
     req_table.add_row("Compliance", "IEC 60601-1, ISO 13485, FDA Class II, RoHS")
     req_table.add_row("Quality", "IPC Class 3 (highest reliability)")
     req_table.add_row("Quantity", "50 units")
@@ -263,9 +377,9 @@ def main():
     wait_for_user()
 
     # =========================================================================
-    # STEP 6: Process BOM - Agent Pipeline
+    # STEP 7: Process BOM - Agent Pipeline
     # =========================================================================
-    banner("Step 6: Process BOM - The Agent Pipeline")
+    banner("Step 7: Process BOM - The Agent Pipeline")
 
     explain("Now we'll run the full agent pipeline on this BOM.")
     detail("This is the core functionality - AI agents review each part.")
@@ -274,49 +388,53 @@ def main():
     section("The Agent Pipeline")
 
     pipeline = """
-  ┌────────────┐   ┌────────────┐
-  │   INTAKE   │ → │  ENRICH    │
-  │ Parse BOM  │   │ Get Offers │
-  └────────────┘   └────────────┘
-                         │
-         ┌───────────────┼───────────────┐
-         ▼               ▼               ▼
-  ┌────────────┐   ┌────────────┐   ┌────────────┐
-  │ ENGINEERING│   │  SOURCING  │   │  FINANCE   │  ⚡ PARALLEL
-  │   REVIEW   │   │   REVIEW   │   │   REVIEW   │
-  └────────────┘   └────────────┘   └────────────┘
-         └───────────────┼───────────────┘
-                         ▼
-              ┌────────────────┐
-              │ FINAL DECISION │  ⚖️  Aggregates all inputs
-              │   (LLM call)   │
-              └────────────────┘
-                         │
-                         ▼
-              ┌────────────────┐
-              │    COMPLETE    │  ✅
-              └────────────────┘
+  ┌──────────┐   ┌──────────┐   ┌─────────────┐
+  │  INTAKE  │ → │  ENRICH  │ → │MARKET INTEL │
+  │Parse BOM │   │Get Offers│   │   (Apify)   │
+  └──────────┘   └──────────┘   └──────┬──────┘
+                                       │
+                ┌──────────────────────┼──────────────────────┐
+                ▼                      ▼                      ▼
+        ┌─────────────┐        ┌─────────────┐        ┌─────────────┐
+        │ ENGINEERING │        │  SOURCING   │        │   FINANCE   │
+        │   REVIEW    │        │   REVIEW    │        │   REVIEW    │
+        │   (LLM)     │        │   (LLM)     │        │   (LLM)     │
+        └─────────────┘        └─────────────┘        └─────────────┘
+                └──────────────────────┼──────────────────────┘
+                                       │
+                                       ▼                  ⚡ PARALLEL
+                              ┌────────────────┐
+                              │ FINAL DECISION │          ⚖️ Aggregates
+                              │     (LLM)      │          all inputs
+                              └───────┬────────┘
+                                      │
+                                      ▼
+                              ┌────────────────┐
+                              │    COMPLETE    │          ✅
+                              └────────────────┘
 """
     console.print(pipeline)
 
     console.print("[cyan]Agent Roles:[/cyan]")
-    console.print("  🔧 [cyan]EngineeringAgent[/cyan]: Compliance, lifecycle, preferred manufacturers")
-    console.print("  📦 [green]SourcingAgent[/green]: Supplier trust, lead times, stock availability")
-    console.print("  💰 [yellow]FinanceAgent[/yellow]: Budget constraints, price breaks, cost optimization")
-    console.print("  ⚖️  [magenta]FinalDecisionAgent[/magenta]: Synthesizes all inputs, makes final call")
+    console.print("  🔧 [bold cyan]EngineeringAgent[/]  Technical compliance, lifecycle status, preferred manufacturers")
+    console.print("  📦 [bold green]SourcingAgent[/]     Supplier trust, lead times, stock availability, market intel")
+    console.print("  💰 [bold yellow]FinanceAgent[/]      Budget constraints, price breaks, cost optimization")
+    console.print("  ⚖️  [bold magenta]FinalDecisionAgent[/] Synthesizes all inputs, selects supplier, final approval")
     console.print()
 
-    explain("This will take 1-2 minutes as agents reason through each part...")
-    console.print("[dim]Watch the server terminal for real-time reasoning output![/dim]")
+    explain("LLM calls happen at: Parallel Review (3 agents) + Final Decision (1 agent)")
 
     wait_for_user()
 
-    console.print("[yellow]Running agent pipeline...[/yellow]")
+    console.print()
+    section("Running Agent Pipeline")
     console.print()
 
-    start_time = time.time()
-    run_cmd(f"uv run sourcing process {BOM_FILE} --intake {INTAKE_FILE}")
-    elapsed = time.time() - start_time
+    # Use spinner for the LLM-heavy processing step
+    _, elapsed = run_cmd_with_spinner(
+        f"uv run sourcing process {BOM_FILE} --intake {INTAKE_FILE}",
+        "[bold cyan]Processing BOM with AI agents...[/] Engineering, Sourcing, Finance running in parallel",
+    )
 
     console.print()
     console.print(f"[green]✓ Processing completed in {elapsed:.1f}s[/green]")
@@ -324,9 +442,9 @@ def main():
     wait_for_user()
 
     # =========================================================================
-    # STEP 7: View Results
+    # STEP 8: View Results
     # =========================================================================
-    banner("Step 7: View Project Results")
+    banner("Step 8: View Project Results")
 
     explain("The project is now stored in the database. Let's view the results.")
     console.print()
@@ -334,7 +452,7 @@ def main():
     run_cmd("uv run sourcing status")
 
     # Get latest project ID
-    import httpx
+    project_id = None
     try:
         resp = httpx.get("http://localhost:8000/projects")
         projects = resp.json()
@@ -345,14 +463,14 @@ def main():
             console.print()
             run_cmd(f"uv run sourcing status {project_id}")
     except Exception:
-        project_id = None
+        pass
 
     wait_for_user()
 
     # =========================================================================
-    # STEP 8: Agent Reasoning Trace
+    # STEP 9: Agent Reasoning Trace
     # =========================================================================
-    banner("Step 8: Agent Reasoning Trace")
+    banner("Step 9: Agent Reasoning Trace")
 
     explain("Every agent decision is logged with full reasoning.")
     detail("This provides an audit trail and helps understand why parts were approved/rejected.")
@@ -362,13 +480,15 @@ def main():
         console.print("[dim]Showing first 80 lines of trace...[/dim]")
         console.print()
         run_cmd(f"uv run sourcing trace {project_id} | head -80")
+    else:
+        console.print("[dim]No project found - skipping trace view[/dim]")
 
     wait_for_user()
 
     # =========================================================================
-    # STEP 9: Modify Knowledge Base
+    # STEP 10: Modify Knowledge Base
     # =========================================================================
-    banner("Step 9: Modify Knowledge Base")
+    banner("Step 10: Modify Knowledge Base")
 
     explain("Knowledge base changes persist and affect future processing.")
     detail("Let's simulate discovering a quality issue with a capacitor.")
@@ -395,9 +515,9 @@ def main():
     wait_for_user()
 
     # =========================================================================
-    # STEP 10: Modify Supplier Trust
+    # STEP 11: Modify Supplier Trust
     # =========================================================================
-    banner("Step 10: Modify Supplier Trust")
+    banner("Step 11: Modify Supplier Trust")
 
     explain("Supplier trust levels affect agent sourcing decisions.")
     detail("Higher trust suppliers are preferred when offers are similar.")
@@ -427,9 +547,11 @@ def main():
     section("What We Covered")
     covered = [
         "System architecture (CLI → API → Stores → Agents)",
+        "x402 payment protocol for pay-per-use access",
         "Health check and API endpoints",
         "Knowledge base: suppliers and parts",
-        "BOM processing through parallel agent pipeline",
+        "Multi-agent pipeline with parallel LLM execution",
+        "Market intelligence gathering via web scraping",
         "Final Decision agent aggregating all inputs",
         "Agent reasoning and audit trace",
         "Modifying knowledge (ban parts, add alternates)",
@@ -446,6 +568,9 @@ def main():
     console.print("  [cyan]Re-process with Updated Knowledge:[/cyan]")
     console.print(f"    uv run sourcing process {BOM_FILE} --intake {INTAKE_FILE}")
     console.print("    (The banned capacitor should now trigger different behavior)")
+    console.print()
+    console.print("  [cyan]Enable x402 Payments:[/cyan]")
+    console.print("    Set AUTH_X402_ENABLED=true and AUTH_X402_PAY_TO_ADDRESS")
     console.print()
 
     console.print("[blue]Thanks for walking through the demo![/blue]")

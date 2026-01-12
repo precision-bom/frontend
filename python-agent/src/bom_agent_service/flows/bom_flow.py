@@ -21,6 +21,8 @@ from ..models import (
     PreferredManufacturers,
     ProductType,
     AgentDecision,
+    SpecialistAgentResult,
+    FinalDecisionReport,
 )
 from ..models.market_intel import MarketIntelReport
 from ..stores import ProjectStore, OffersStore, OrgKnowledgeStore
@@ -29,6 +31,7 @@ from ..stores.org_knowledge import seed_default_suppliers
 from ..stores.market_intel_store import MarketIntelStore
 from ..agents import EngineeringAgent, SourcingAgent, FinanceAgent, FinalDecisionAgent, MarketIntelAgent
 from ..services.apify_client import ApifyClient
+from ..utils.rich_logger import console, log_flow_step
 
 
 class BOMFlowState(BaseModel):
@@ -67,10 +70,13 @@ class BOMProcessingFlow(Flow[BOMFlowState]):
         self._final_decision_agent = final_decision_agent
         self._market_intel_agent = market_intel_agent
 
-        # Store agent decisions for aggregation
-        self._engineering_decisions: dict[str, AgentDecision] = {}
-        self._sourcing_decisions: dict[str, AgentDecision] = {}
-        self._finance_decisions: dict[str, AgentDecision] = {}
+        # Store specialist agent results
+        self._engineering_result: Optional[SpecialistAgentResult] = None
+        self._sourcing_result: Optional[SpecialistAgentResult] = None
+        self._finance_result: Optional[SpecialistAgentResult] = None
+
+        # Store final decision report
+        self._final_report: Optional[FinalDecisionReport] = None
 
         # Market intelligence report
         self._market_intel_report: Optional[MarketIntelReport] = None
@@ -89,6 +95,9 @@ class BOMProcessingFlow(Flow[BOMFlowState]):
             self.project_store.update_project(self._project)
         if self.on_step:
             self.on_step(trace_step)
+
+        # Also log with rich formatting
+        log_flow_step(step, message, agent)
 
     @start()
     def intake(self):
@@ -219,10 +228,11 @@ class BOMProcessingFlow(Flow[BOMFlowState]):
             return self.state
 
         # Run all three agents in parallel using asyncio.gather
+        # Now returns SpecialistAgentResult instead of dict[str, AgentDecision]
         (
-            self._engineering_decisions,
-            self._sourcing_decisions,
-            self._finance_decisions,
+            self._engineering_result,
+            self._sourcing_result,
+            self._finance_result,
         ) = await asyncio.gather(
             self._engineering_agent.evaluate_batch(
                 items_to_evaluate,
@@ -245,56 +255,48 @@ class BOMProcessingFlow(Flow[BOMFlowState]):
         parallel_time = time.time() - start_time
         self._log_step("parallel_review", f"Parallel LLM calls completed in {parallel_time:.1f}s")
 
-        # Log each agent's decisions with full reasoning
-        self._log_agent_decisions("engineering", self._engineering_decisions, items_to_evaluate)
-        self._log_agent_decisions("sourcing", self._sourcing_decisions, items_to_evaluate)
-        self._log_agent_decisions("finance", self._finance_decisions, items_to_evaluate)
+        # Log specialist results
+        self._log_step(
+            "engineering",
+            f"Engineering analysis complete for {len(self._engineering_result.parts_evaluated)} parts",
+            agent="EngineeringAgent",
+            reasoning=self._engineering_result.analysis_notes[:500] + "..." if len(self._engineering_result.analysis_notes) > 500 else self._engineering_result.analysis_notes,
+        )
+        self._log_step(
+            "sourcing",
+            f"Sourcing analysis complete for {len(self._sourcing_result.parts_evaluated)} parts",
+            agent="SourcingAgent",
+            reasoning=self._sourcing_result.analysis_notes[:500] + "..." if len(self._sourcing_result.analysis_notes) > 500 else self._sourcing_result.analysis_notes,
+        )
+        self._log_step(
+            "finance",
+            f"Finance analysis complete for {len(self._finance_result.parts_evaluated)} parts",
+            agent="FinanceAgent",
+            reasoning=self._finance_result.analysis_notes[:500] + "..." if len(self._finance_result.analysis_notes) > 500 else self._finance_result.analysis_notes,
+        )
 
-        # Store decisions on line items for reference
+        # Mark items as pending final decision
         for item in items_to_evaluate:
-            item.engineering_decision = self._engineering_decisions.get(item.mpn)
-            item.sourcing_decision = self._sourcing_decisions.get(item.mpn)
-            item.finance_decision = self._finance_decisions.get(item.mpn)
             item.status = LineItemStatus.PENDING_FINAL_DECISION
 
         self.project_store.update_project(self._project)
 
-        eng_approved = sum(1 for d in self._engineering_decisions.values() if d.status == DecisionStatus.APPROVED)
-        src_approved = sum(1 for d in self._sourcing_decisions.values() if d.status == DecisionStatus.APPROVED)
-        fin_approved = sum(1 for d in self._finance_decisions.values() if d.status == DecisionStatus.APPROVED)
-
         self._log_step(
             "parallel_review",
-            f"Parallel review complete: Engineering {eng_approved}/{len(items_to_evaluate)} approved, "
-            f"Sourcing {src_approved}/{len(items_to_evaluate)} approved, "
-            f"Finance {fin_approved}/{len(items_to_evaluate)} approved"
+            f"Parallel review complete: All specialist analyses collected for {len(items_to_evaluate)} parts"
         )
 
         return self.state
 
-    def _log_agent_decisions(self, agent_type: str, decisions: dict[str, AgentDecision], items: list[BOMLineItem]):
-        """Log each decision from an agent with full reasoning."""
-        agent_name = f"{agent_type.title()}Agent"
-        for item in items:
-            decision = decisions.get(item.mpn)
-            if decision:
-                # Log the full reasoning, not truncated
-                self._log_step(
-                    agent_type,
-                    f"{item.mpn}: {decision.status.value}",
-                    agent=agent_name,
-                    reasoning=decision.reasoning,  # Full reasoning, no truncation
-                )
-
     @listen(parallel_agent_review)
     async def final_decision(self):
-        """Run Final Decision Agent to aggregate all inputs and make final decisions."""
+        """Run Final Decision Agent to synthesize all inputs and make final decisions."""
         import time
         if self.state.error:
             return self.state
 
         start_time = time.time()
-        self._log_step("final_decision", "Starting final decision aggregation")
+        self._log_step("final_decision", "Starting final decision synthesis")
 
         self._project = self.project_store.get_project(self.state.project_id)
         self._project.status = "final_decision"
@@ -309,49 +311,77 @@ class BOMProcessingFlow(Flow[BOMFlowState]):
             self._log_step("final_decision", "No items pending final decision")
             return self.state
 
-        # Run final decision agent
-        final_decisions = await self._final_decision_agent.make_final_decisions(
+        # Run final decision agent with specialist results
+        self._final_report = await self._final_decision_agent.make_final_decisions(
             items_to_decide,
             self._project.context,
-            self._engineering_decisions,
-            self._sourcing_decisions,
-            self._finance_decisions,
+            self._engineering_result,
+            self._sourcing_result,
+            self._finance_result,
         )
+
         final_time = time.time() - start_time
         self._log_step("final_decision", f"Final decision LLM call completed in {final_time:.1f}s")
 
-        # Apply final decisions
-        approved = 0
-        total_spend = 0.0
-        for item in items_to_decide:
-            decision = final_decisions.get(item.mpn)
-            if decision:
-                item.final_decision = decision
+        # Convert FinalDecisionReport to AgentDecision for storage on line items
+        # This preserves API compatibility
+        verdict_map = {v.mpn: v for v in self._final_report.verdicts}
 
-                if decision.status == DecisionStatus.APPROVED:
-                    item.selected_mpn = item.mpn  # Could be alternate in future
-                    item.selected_supplier = decision.output_data.get("selected_supplier_id")
+        for item in items_to_decide:
+            verdict = verdict_map.get(item.mpn)
+            if verdict:
+                # Create AgentDecision from verdict for API compatibility
+                item.final_decision = AgentDecision(
+                    agent_name="FinalDecisionAgent",
+                    status=DecisionStatus.APPROVED if verdict.verdict == "APPROVED" else DecisionStatus.REJECTED,
+                    reasoning=verdict.resolution_rationale,
+                    output_data={
+                        "selected_supplier_id": verdict.selected_supplier_id,
+                        "selected_supplier_name": verdict.selected_supplier_name,
+                        "final_quantity": verdict.final_quantity,
+                        "final_unit_price": verdict.final_unit_price,
+                        "final_line_cost": verdict.final_line_cost,
+                        "engineering_findings": verdict.engineering_findings,
+                        "sourcing_findings": verdict.sourcing_findings,
+                        "finance_findings": verdict.finance_findings,
+                        "points_of_agreement": verdict.points_of_agreement,
+                        "points_of_conflict": verdict.points_of_conflict,
+                        "risk_factors": verdict.risk_factors,
+                        "mitigations": verdict.mitigations,
+                        "conditions": verdict.conditions,
+                        # Include report-level data
+                        "executive_summary": self._final_report.executive_summary,
+                        "total_approved_spend": self._final_report.total_spend,
+                        "budget_utilization_pct": self._final_report.budget_utilization_pct,
+                    },
+                    references=[],
+                )
+
+                if verdict.verdict == "APPROVED":
+                    item.selected_mpn = item.mpn
+                    item.selected_supplier = verdict.selected_supplier_id
                     item.status = LineItemStatus.PENDING_PURCHASE
-                    total_spend += decision.output_data.get("final_line_cost", 0.0)
-                    approved += 1
                 else:
                     item.status = LineItemStatus.FAILED
 
-                # Log with full reasoning
+                # Log each verdict
                 self._log_step(
                     "final_decision",
-                    f"{item.mpn}: {decision.status.value} - "
-                    f"Supplier: {decision.output_data.get('selected_supplier_name', 'N/A')}, "
-                    f"Qty: {decision.output_data.get('final_quantity', 0)}, "
-                    f"Cost: ${decision.output_data.get('final_line_cost', 0):.2f}",
+                    f"{item.mpn}: {verdict.verdict} - "
+                    f"Supplier: {verdict.selected_supplier_name or 'N/A'}, "
+                    f"Qty: {verdict.final_quantity}, "
+                    f"Cost: ${verdict.final_line_cost:.2f}",
                     agent="FinalDecisionAgent",
-                    reasoning=decision.reasoning,  # Full comprehensive rationale
+                    reasoning=verdict.resolution_rationale,
                 )
 
         self.project_store.update_project(self._project)
+
         self._log_step(
             "final_decision",
-            f"Final decisions complete: {approved}/{len(items_to_decide)} approved, ${total_spend:,.2f} total spend"
+            f"Final decisions complete: {self._final_report.total_approved}/{len(items_to_decide)} approved, "
+            f"${self._final_report.total_spend:,.2f} total spend "
+            f"({self._final_report.budget_utilization_pct:.1f}% of budget)"
         )
 
         return self.state
@@ -367,6 +397,15 @@ class BOMProcessingFlow(Flow[BOMFlowState]):
         self.project_store.update_project(self._project)
 
         self._log_step("complete", f"Project {self._project.project_id} processing complete")
+
+        # Print final summary using rich
+        if self._final_report:
+            console.rule("[bold green]PROCESSING COMPLETE[/bold green]", style="green")
+            console.print(f"[bold]Project:[/bold] {self._project.project_id}")
+            console.print(f"[bold]Parts:[/bold] {self._final_report.total_approved} approved, {self._final_report.total_rejected} rejected")
+            console.print(f"[bold]Total Spend:[/bold] ${self._final_report.total_spend:,.2f}")
+            console.print(f"[bold]Budget Utilization:[/bold] {self._final_report.budget_utilization_pct:.1f}%")
+            console.print()
 
         return self.state
 
@@ -452,7 +491,7 @@ def initialize_agents(data_dir: str = "data"):
     global _engineering_agent, _sourcing_agent, _finance_agent, _final_decision_agent
     global _market_intel_agent, _org_store, _intel_store, _apify_client
 
-    print("Initializing BOM processing agents...")
+    console.rule("[bold blue]Initializing BOM Processing Agents[/bold blue]", style="blue")
 
     _org_store = OrgKnowledgeStore(f"{data_dir}/org_knowledge.db")
     seed_default_suppliers(_org_store)
@@ -468,13 +507,16 @@ def initialize_agents(data_dir: str = "data"):
 
     if _apify_client.is_configured():
         _market_intel_agent = MarketIntelAgent(_apify_client, _intel_store)
-        print("Market Intelligence agent initialized with Apify")
+        console.print("[green]Market Intelligence agent initialized with Apify[/green]")
     else:
         _market_intel_agent = None
-        print("Apify not configured - Market Intelligence agent disabled (set APIFY_API_TOKEN to enable)")
+        console.print("[yellow]Apify not configured - Market Intelligence agent disabled[/yellow]")
 
-    print(f"Agents initialized with model: {_engineering_agent._llm.model}")
-    print("Flow: Intake → Enrich → Market Intel → [Engineering | Sourcing | Finance] (parallel) → Final Decision → Complete")
+    console.print(f"[bold]Parallel agents model:[/bold] {_engineering_agent._llm.model}")
+    console.print(f"[bold]Final decision model:[/bold] {_final_decision_agent._llm.model}")
+    console.print()
+    console.print("[dim]Flow: Intake -> Enrich -> Market Intel -> [Engineering | Sourcing | Finance] (parallel) -> Final Decision -> Complete[/dim]")
+    console.print()
 
 
 def get_agents():

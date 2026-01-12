@@ -1,48 +1,31 @@
-"""Engineering review agent with batch processing."""
+"""Engineering review agent with prose output."""
 
 import logging
-from typing import Literal
 from crewai import Agent, Task, Crew
-from pydantic import BaseModel, Field
 
 from ..models import (
     BOMLineItem,
     ProjectContext,
-    AgentDecision,
-    DecisionStatus,
     PartOffers,
+    SpecialistAgentResult,
 )
 from ..stores import OrgKnowledgeStore, OffersStore
-from .memory_config import get_llm
+from .memory_config import get_fast_llm
+from ..utils.rich_logger import console, log_specialist_result
 
 logger = logging.getLogger(__name__)
-
-
-# Pydantic models for structured output
-class EngineeringPartDecision(BaseModel):
-    """Decision for a single part from engineering review."""
-    mpn: str = Field(description="The manufacturer part number")
-    decision: Literal["APPROVED", "REJECTED"] = Field(description="Whether the part is approved or rejected")
-    reasoning: str = Field(description="Explanation for the decision")
-    concerns: list[str] = Field(default_factory=list, description="List of concerns if any")
-    approved_alternates: list[str] = Field(default_factory=list, description="Approved alternate part numbers")
-
-
-class EngineeringBatchResult(BaseModel):
-    """Batch result from engineering review."""
-    decisions: list[EngineeringPartDecision] = Field(description="List of decisions for each part")
 
 
 class EngineeringAgent:
     """
     Evaluates technical acceptability of parts.
-    Processes all parts in a single LLM call for efficiency.
+    Returns prose analysis via SpecialistAgentResult.
     """
 
     def __init__(self, org_store: OrgKnowledgeStore):
-        """Initialize agent with LLM. All context is pre-aggregated in prompts."""
+        """Initialize agent with fast LLM for prose output."""
         self.org_store = org_store
-        self._llm = get_llm()
+        self._llm = get_fast_llm()
 
         self.agent = Agent(
             role="Electronics Engineering Expert",
@@ -59,17 +42,22 @@ class EngineeringAgent:
         line_items: list[BOMLineItem],
         project_context: ProjectContext,
         offers_store: OffersStore,
-    ) -> dict[str, AgentDecision]:
-        """Evaluate all line items in a single LLM call (async).
+    ) -> SpecialistAgentResult:
+        """Evaluate all line items and return prose analysis.
 
-        Returns a dict mapping MPN to AgentDecision.
-        Raises ValueError if the LLM returns an invalid response.
+        Returns SpecialistAgentResult with comprehensive prose analysis.
         """
         if not line_items:
-            return {}
+            return SpecialistAgentResult(
+                agent_name="EngineeringAgent",
+                parts_evaluated=[],
+                analysis_notes="No parts to evaluate.",
+                raw_response="",
+            )
 
         # Build context for all parts
         parts_context = []
+        key_concerns = []
         for item in line_items:
             part_offers = offers_store.get_offers(item.mpn)
             is_banned, ban_reason = self.org_store.is_part_banned(item.mpn)
@@ -83,6 +71,7 @@ class EngineeringAgent:
                 logger.info(f"[KNOWLEDGE] No prior part knowledge for {item.mpn}")
             if is_banned:
                 logger.info(f"[KNOWLEDGE] Part {item.mpn} is BANNED: {ban_reason}")
+                key_concerns.append(f"{item.mpn}: BANNED - {ban_reason}")
             if approved_alternates:
                 logger.info(f"[KNOWLEDGE] Approved alternates for {item.mpn}: {approved_alternates}")
 
@@ -116,40 +105,33 @@ class EngineeringAgent:
 
 ---
 
-For EACH part, evaluate:
-1. Is the part banned in org knowledge? If so, REJECT.
+## YOUR TASK
+
+Provide a comprehensive engineering analysis for each part. For each part, evaluate:
+1. Is the part banned in org knowledge? If so, flag it clearly.
 2. Does the part meet compliance requirements?
 3. Is the part lifecycle acceptable (active or NRND)?
 4. Is this a critical part needing extra scrutiny?
 5. Are there approved alternates available?
 
-You MUST provide a decision for every part listed: {', '.join(mpn_list)}
+Write your analysis in clear prose, organized by part. Include:
+- Your assessment of each part's technical suitability
+- Any concerns or risks you identify
+- Recommendations for parts that need attention
+- Overall engineering perspective on this BOM
 
-IMPORTANT: Return your response as a JSON object with this exact structure:
-{{
-  "decisions": [
-    {{
-      "mpn": "PART_NUMBER",
-      "decision": "APPROVED" or "REJECTED",
-      "reasoning": "Detailed technical evaluation",
-      "concerns": ["list", "of", "concerns"],
-      "approved_alternates": ["list", "of", "alternates"]
-    }}
-  ]
-}}""",
-            expected_output="JSON object with decisions array containing engineering decisions for each part",
+Parts to cover: {', '.join(mpn_list)}""",
+            expected_output="Comprehensive engineering analysis in prose format covering all parts",
             agent=self.agent,
-            output_pydantic=EngineeringBatchResult,
         )
 
-        # No knowledge_sources - all context is pre-aggregated in the task description
         crew = Crew(
             agents=[self.agent],
             tasks=[task],
             verbose=True,
         )
 
-        # Log full prompt
+        # Log request
         logger.info("=" * 80)
         logger.info("ENGINEERING AGENT - LLM REQUEST")
         logger.info("=" * 80)
@@ -158,40 +140,30 @@ IMPORTANT: Return your response as a JSON object with this exact structure:
 
         result = await crew.kickoff_async()
 
-        # Log full response
+        # Get raw response
+        raw_response = result.raw if result.raw else ""
+
+        # Log response
         logger.info("=" * 80)
         logger.info("ENGINEERING AGENT - LLM RESPONSE")
         logger.info("=" * 80)
-        logger.info(f"RAW RESPONSE:\n{result.raw}")
+        logger.info(f"RAW RESPONSE:\n{raw_response}")
         logger.info("=" * 80)
 
-        # Access the structured pydantic output
-        if not result.pydantic:
-            raise ValueError(f"EngineeringAgent: LLM did not return structured output. Raw: {result.raw[:500] if result.raw else 'EMPTY'}")
+        # Create specialist result
+        specialist_result = SpecialistAgentResult(
+            agent_name="EngineeringAgent",
+            parts_evaluated=mpn_list,
+            analysis_notes=raw_response,
+            key_concerns=key_concerns,
+            recommendations=[],
+            raw_response=raw_response,
+        )
 
-        batch_result: EngineeringBatchResult = result.pydantic
+        # Log with rich formatting
+        log_specialist_result(specialist_result)
 
-        # Convert to AgentDecision dict
-        decisions = {}
-        for part_decision in batch_result.decisions:
-            status = DecisionStatus.APPROVED if part_decision.decision == "APPROVED" else DecisionStatus.REJECTED
-            decisions[part_decision.mpn] = AgentDecision(
-                agent_name="EngineeringAgent",
-                status=status,
-                reasoning=part_decision.reasoning,
-                output_data={
-                    "concerns": part_decision.concerns,
-                    "approved_alternates": part_decision.approved_alternates,
-                },
-                references=[],
-            )
-
-        # Verify all MPNs have decisions
-        missing_mpns = set(mpn_list) - set(decisions.keys())
-        if missing_mpns:
-            raise ValueError(f"EngineeringAgent: Missing decisions for MPNs: {missing_mpns}")
-
-        return decisions
+        return specialist_result
 
     def _build_part_context(
         self,

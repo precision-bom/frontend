@@ -12,6 +12,10 @@ from ..stores import OrgKnowledgeStore
 # Default model - can be overridden via environment variable
 DEFAULT_MODEL = os.environ.get("CREWAI_MODEL", "gpt-5-nano")
 
+# Model tiers for different agent types
+FAST_MODEL = os.environ.get("CREWAI_FAST_MODEL", "gpt-4o-mini")  # Parallel agents (cheap, fast)
+REASONING_MODEL = os.environ.get("CREWAI_REASONING_MODEL", "gpt-4o")  # Final decision (structured output)
+
 
 def get_llm(model: Optional[str] = None) -> LLM:
     """Get configured LLM for agents.
@@ -22,6 +26,30 @@ def get_llm(model: Optional[str] = None) -> LLM:
     return LLM(
         model=model or DEFAULT_MODEL,
         temperature=0.3,  # Lower temperature for more consistent outputs
+    )
+
+
+def get_fast_llm() -> LLM:
+    """Get fast/cheap LLM for parallel specialist agents.
+
+    Uses gpt-4o-mini by default. These agents return prose analysis
+    without requiring structured JSON output.
+    """
+    return LLM(
+        model=FAST_MODEL,
+        temperature=0.3,
+    )
+
+
+def get_reasoning_llm() -> LLM:
+    """Get reasoning LLM for final decision agent.
+
+    Uses gpt-4o by default. This agent produces structured JSON output
+    with comprehensive judicial-style reasoning.
+    """
+    return LLM(
+        model=REASONING_MODEL,
+        temperature=0.2,  # Lower temperature for more consistent structured output
     )
 
 

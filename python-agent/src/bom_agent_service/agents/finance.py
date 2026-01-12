@@ -1,51 +1,29 @@
-"""Finance review agent with batch processing."""
+"""Finance review agent with prose output."""
 
 import logging
-from typing import Literal
 from crewai import Agent, Task, Crew
-from pydantic import BaseModel, Field
 
 from ..models import (
     BOMLineItem,
     ProjectContext,
-    AgentDecision,
-    DecisionStatus,
+    SpecialistAgentResult,
 )
 from ..stores import OffersStore
-from .memory_config import get_llm
+from .memory_config import get_fast_llm
+from ..utils.rich_logger import console, log_specialist_result
 
 logger = logging.getLogger(__name__)
-
-
-# Pydantic models for structured output
-class FinancePartDecision(BaseModel):
-    """Decision for a single part from finance review."""
-    mpn: str = Field(description="The manufacturer part number")
-    decision: Literal["APPROVED", "REJECTED"] = Field(description="Whether the purchase is approved or rejected")
-    recommended_qty: int = Field(description="Recommended quantity to order (considering MOQ and price breaks)")
-    estimated_unit_price: float = Field(description="Estimated unit price based on best available offer")
-    estimated_line_cost: float = Field(description="Total estimated cost for this line item")
-    budget_impact: str = Field(description="Assessment of impact on overall budget (e.g., 'within budget', 'exceeds allocation')")
-    reasoning: str = Field(description="Detailed explanation for the finance decision including cost analysis")
-
-
-class FinanceBatchResult(BaseModel):
-    """Batch result from finance review."""
-    decisions: list[FinancePartDecision] = Field(description="List of finance decisions for each part")
-    total_estimated_spend: float = Field(description="Total estimated spend across all approved items")
-    budget_utilization_pct: float = Field(description="Percentage of budget utilized")
 
 
 class FinanceAgent:
     """
     Evaluates cost and budget fit.
-    Processes all parts in a single LLM call for efficiency.
-    Evaluates independently - does not require prior agent decisions.
+    Returns prose analysis via SpecialistAgentResult.
     """
 
     def __init__(self):
-        """Initialize agent with LLM. All context is pre-aggregated in prompts."""
-        self._llm = get_llm()
+        """Initialize agent with fast LLM for prose output."""
+        self._llm = get_fast_llm()
 
         self.agent = Agent(
             role="Procurement Finance Analyst",
@@ -62,29 +40,42 @@ class FinanceAgent:
         line_items: list[BOMLineItem],
         project_context: ProjectContext,
         offers_store: OffersStore,
-    ) -> dict[str, AgentDecision]:
-        """Evaluate finance for all line items in a single LLM call (async).
+    ) -> SpecialistAgentResult:
+        """Evaluate finance for all line items and return prose analysis.
 
-        Evaluates ALL items independently - does not require prior agent decisions.
-        Returns a dict mapping MPN to AgentDecision.
-        Raises ValueError if the LLM returns an invalid response.
+        Returns SpecialistAgentResult with comprehensive prose analysis.
         """
         if not line_items:
-            return {}
+            return SpecialistAgentResult(
+                agent_name="FinanceAgent",
+                parts_evaluated=[],
+                analysis_notes="No parts to evaluate.",
+                raw_response="",
+            )
 
         # Build context for all parts with available offers
         parts_context = []
         running_total = 0.0
         offers_found = 0
+        key_concerns = []
+
         for item in line_items:
             part_offers = offers_store.get_offers(item.mpn)
             if part_offers and part_offers.offers:
                 offers_found += len(part_offers.offers)
                 logger.info(f"[KNOWLEDGE] {len(part_offers.offers)} offers found for {item.mpn}")
+            else:
+                key_concerns.append(f"{item.mpn}: No pricing data available")
 
             part_ctx, estimated_cost = self._build_part_context(item, project_context, offers_store, running_total)
             parts_context.append(part_ctx)
             running_total += estimated_cost
+
+        # Check budget concerns
+        if running_total > project_context.budget_total:
+            key_concerns.append(f"Estimated spend (${running_total:,.2f}) exceeds budget (${project_context.budget_total:,.2f})")
+        elif running_total > project_context.budget_total * 0.9:
+            key_concerns.append(f"Estimated spend (${running_total:,.2f}) is over 90% of budget")
 
         logger.info(f"[KNOWLEDGE] Finance analysis: {len(line_items)} parts, {offers_found} total offers, estimated spend ${running_total:,.2f}")
 
@@ -108,7 +99,9 @@ class FinanceAgent:
 
 ---
 
-For EACH part, provide a thorough financial evaluation:
+## YOUR TASK
+
+Provide a comprehensive financial analysis for each part. For each part, evaluate:
 1. Analyze the best available pricing from offers
 2. Consider MOQ requirements and recommend optimal order quantity
 3. Calculate estimated line cost
@@ -116,37 +109,25 @@ For EACH part, provide a thorough financial evaluation:
 5. Identify any cost optimization opportunities
 6. Flag budget concerns if line item is expensive relative to budget
 
-You MUST provide a decision for every part listed: {', '.join(mpn_list)}
+Write your analysis in clear prose, organized by part. Include:
+- Cost analysis and pricing recommendations for each part
+- MOQ considerations and quantity recommendations
+- Budget impact assessment
+- Cost optimization opportunities
+- Overall financial perspective on this BOM
 
-IMPORTANT: Return your response as a JSON object with this exact structure:
-{{
-  "decisions": [
-    {{
-      "mpn": "PART_NUMBER",
-      "decision": "APPROVED" or "REJECTED",
-      "reasoning": "Detailed cost analysis explanation",
-      "recommended_qty": 100,
-      "estimated_unit_price": 1.50,
-      "estimated_line_cost": 150.00,
-      "budget_impact": "within_budget" or "over_budget"
-    }}
-  ],
-  "total_estimated_spend": 500.00,
-  "budget_utilization_pct": 50.0
-}}""",
-            expected_output="JSON object with decisions array containing finance decisions for each part",
+Parts to cover: {', '.join(mpn_list)}""",
+            expected_output="Comprehensive financial analysis in prose format covering all parts",
             agent=self.agent,
-            output_pydantic=FinanceBatchResult,
         )
 
-        # No knowledge_sources - all context is pre-aggregated in the task description
         crew = Crew(
             agents=[self.agent],
             tasks=[task],
             verbose=True,
         )
 
-        # Log full prompt
+        # Log request
         logger.info("=" * 80)
         logger.info("FINANCE AGENT - LLM REQUEST")
         logger.info("=" * 80)
@@ -155,45 +136,30 @@ IMPORTANT: Return your response as a JSON object with this exact structure:
 
         result = await crew.kickoff_async()
 
-        # Log full response
+        # Get raw response
+        raw_response = result.raw if result.raw else ""
+
+        # Log response
         logger.info("=" * 80)
         logger.info("FINANCE AGENT - LLM RESPONSE")
         logger.info("=" * 80)
-        logger.info(f"RAW RESPONSE:\n{result.raw}")
+        logger.info(f"RAW RESPONSE:\n{raw_response}")
         logger.info("=" * 80)
 
-        # Access the structured pydantic output
-        if not result.pydantic:
-            raise ValueError(f"FinanceAgent: LLM did not return structured output. Raw: {result.raw[:500] if result.raw else 'EMPTY'}")
+        # Create specialist result
+        specialist_result = SpecialistAgentResult(
+            agent_name="FinanceAgent",
+            parts_evaluated=mpn_list,
+            analysis_notes=raw_response,
+            key_concerns=key_concerns,
+            recommendations=[],
+            raw_response=raw_response,
+        )
 
-        batch_result: FinanceBatchResult = result.pydantic
+        # Log with rich formatting
+        log_specialist_result(specialist_result)
 
-        # Convert to AgentDecision dict
-        decisions = {}
-        for part_decision in batch_result.decisions:
-            status = DecisionStatus.APPROVED if part_decision.decision == "APPROVED" else DecisionStatus.REJECTED
-
-            decisions[part_decision.mpn] = AgentDecision(
-                agent_name="FinanceAgent",
-                status=status,
-                reasoning=part_decision.reasoning,
-                output_data={
-                    "recommended_qty": part_decision.recommended_qty,
-                    "estimated_unit_price": part_decision.estimated_unit_price,
-                    "estimated_line_cost": part_decision.estimated_line_cost,
-                    "budget_impact": part_decision.budget_impact,
-                    "total_estimated_spend": batch_result.total_estimated_spend,
-                    "budget_utilization_pct": batch_result.budget_utilization_pct,
-                },
-                references=[],
-            )
-
-        # Verify all MPNs have decisions
-        missing_mpns = set(mpn_list) - set(decisions.keys())
-        if missing_mpns:
-            raise ValueError(f"FinanceAgent: Missing decisions for MPNs: {missing_mpns}")
-
-        return decisions
+        return specialist_result
 
     def _build_part_context(
         self,

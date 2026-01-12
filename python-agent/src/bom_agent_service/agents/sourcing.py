@@ -1,52 +1,32 @@
-"""Sourcing review agent with batch processing."""
+"""Sourcing review agent with prose output."""
 
 import logging
-from typing import Literal, Optional
+from typing import Optional
 from crewai import Agent, Task, Crew
-from pydantic import BaseModel, Field
 
 from ..models import (
     BOMLineItem,
     ProjectContext,
-    AgentDecision,
-    DecisionStatus,
-    RiskLevel,
+    SpecialistAgentResult,
 )
 from ..models.market_intel import MarketIntelReport
 from ..stores import OrgKnowledgeStore, OffersStore
-from .memory_config import get_llm
+from .memory_config import get_fast_llm
+from ..utils.rich_logger import console, log_specialist_result
 
 logger = logging.getLogger(__name__)
-
-
-# Pydantic models for structured output
-class SourcingPartDecision(BaseModel):
-    """Decision for a single part from sourcing review."""
-    mpn: str = Field(description="The manufacturer part number")
-    decision: Literal["APPROVED", "REJECTED"] = Field(description="Whether sourcing is approved or rejected")
-    selected_supplier: Optional[str] = Field(default=None, description="The selected supplier ID")
-    selected_supplier_name: Optional[str] = Field(default=None, description="The selected supplier name")
-    unit_price: float = Field(default=0.0, description="Unit price from selected supplier")
-    lead_time_days: int = Field(default=0, description="Lead time in days")
-    risk_level: Literal["low", "medium", "high"] = Field(default="medium", description="Supply risk level")
-    reasoning: str = Field(description="Explanation for the sourcing decision")
-
-
-class SourcingBatchResult(BaseModel):
-    """Batch result from sourcing review."""
-    decisions: list[SourcingPartDecision] = Field(description="List of sourcing decisions for each part")
 
 
 class SourcingAgent:
     """
     Evaluates supply availability and risk.
-    Processes all parts in a single LLM call for efficiency.
+    Returns prose analysis via SpecialistAgentResult.
     """
 
     def __init__(self, org_store: OrgKnowledgeStore):
-        """Initialize agent with LLM. All context is pre-aggregated in prompts."""
+        """Initialize agent with fast LLM for prose output."""
         self.org_store = org_store
-        self._llm = get_llm()
+        self._llm = get_fast_llm()
 
         self.agent = Agent(
             role="Supply Chain Analyst",
@@ -64,8 +44,8 @@ class SourcingAgent:
         project_context: ProjectContext,
         offers_store: OffersStore,
         market_intel_report: Optional[MarketIntelReport] = None,
-    ) -> dict[str, AgentDecision]:
-        """Evaluate sourcing for all line items in a single LLM call (async).
+    ) -> SpecialistAgentResult:
+        """Evaluate sourcing for all line items and return prose analysis.
 
         Args:
             line_items: BOM line items to evaluate
@@ -73,15 +53,20 @@ class SourcingAgent:
             offers_store: Store with supplier offers
             market_intel_report: Optional market intelligence from Apify scraping
 
-        Returns a dict mapping MPN to AgentDecision.
-        Raises ValueError if the LLM returns an invalid response.
+        Returns SpecialistAgentResult with comprehensive prose analysis.
         """
         if not line_items:
-            return {}
+            return SpecialistAgentResult(
+                agent_name="SourcingAgent",
+                parts_evaluated=[],
+                analysis_notes="No parts to evaluate.",
+                raw_response="",
+            )
 
         # Collect all unique suppliers across all parts first
         supplier_ids_seen: set[str] = set()
         suppliers_context: list[str] = []
+        key_concerns = []
 
         for item in line_items:
             mpns_to_check = [item.mpn] + item.approved_alternates
@@ -100,7 +85,12 @@ class SourcingAgent:
         # Build context for all parts (without repeating supplier details)
         parts_context = []
         for item in line_items:
-            parts_context.append(self._build_part_context(item, project_context, offers_store))
+            part_ctx = self._build_part_context(item, project_context, offers_store)
+            parts_context.append(part_ctx)
+            # Check for potential concerns
+            part_offers = offers_store.get_offers(item.mpn)
+            if not part_offers or not part_offers.offers:
+                key_concerns.append(f"{item.mpn}: No offers available")
 
         all_parts_text = "\n\n---\n\n".join(parts_context)
         mpn_list = [item.mpn for item in line_items]
@@ -133,7 +123,9 @@ class SourcingAgent:
 
 ---
 
-For EACH part, evaluate:
+## YOUR TASK
+
+Provide a comprehensive sourcing analysis for each part. For each part, evaluate:
 1. Stock availability vs quantity needed
 2. Lead time vs project deadline
 3. Price (consider price breaks)
@@ -141,22 +133,25 @@ For EACH part, evaluate:
 5. Authorized vs broker sourcing
 6. Market intelligence alerts (shortages, supply chain risks, price trends)
 
-Select the best offer for each part. Factor in any market intelligence about supply chain risks or component shortages.
+Write your analysis in clear prose, organized by part. Include:
+- Your recommended supplier for each part and why
+- Any supply chain risks you identify
+- Lead time concerns or opportunities
+- Pricing analysis and recommendations
+- Overall sourcing perspective on this BOM
 
-You MUST provide a decision for every part listed: {', '.join(mpn_list)}""",
-            expected_output="Structured sourcing decisions for each part with supplier selection and reasoning",
+Parts to cover: {', '.join(mpn_list)}""",
+            expected_output="Comprehensive sourcing analysis in prose format covering all parts",
             agent=self.agent,
-            output_pydantic=SourcingBatchResult,
         )
 
-        # No knowledge_sources - all context is pre-aggregated in the task description
         crew = Crew(
             agents=[self.agent],
             tasks=[task],
             verbose=True,
         )
 
-        # Log full prompt
+        # Log request
         logger.info("=" * 80)
         logger.info("SOURCING AGENT - LLM REQUEST")
         logger.info("=" * 80)
@@ -165,51 +160,30 @@ You MUST provide a decision for every part listed: {', '.join(mpn_list)}""",
 
         result = await crew.kickoff_async()
 
-        # Log full response
+        # Get raw response
+        raw_response = result.raw if result.raw else ""
+
+        # Log response
         logger.info("=" * 80)
         logger.info("SOURCING AGENT - LLM RESPONSE")
         logger.info("=" * 80)
-        logger.info(f"RAW RESPONSE:\n{result.raw}")
+        logger.info(f"RAW RESPONSE:\n{raw_response}")
         logger.info("=" * 80)
 
-        # Access the structured pydantic output
-        if not result.pydantic:
-            raise ValueError(f"SourcingAgent: LLM did not return structured output. Raw: {result.raw[:500] if result.raw else 'EMPTY'}")
+        # Create specialist result
+        specialist_result = SpecialistAgentResult(
+            agent_name="SourcingAgent",
+            parts_evaluated=mpn_list,
+            analysis_notes=raw_response,
+            key_concerns=key_concerns,
+            recommendations=[],
+            raw_response=raw_response,
+        )
 
-        batch_result: SourcingBatchResult = result.pydantic
+        # Log with rich formatting
+        log_specialist_result(specialist_result)
 
-        # Debug: log what we got back
-        logger.info(f"SourcingAgent: Got {len(batch_result.decisions)} decisions for {len(mpn_list)} parts")
-        returned_mpns = {d.mpn for d in batch_result.decisions}
-        logger.info(f"SourcingAgent: Returned MPNs: {returned_mpns}")
-
-        # Convert to AgentDecision dict
-        decisions = {}
-        for part_decision in batch_result.decisions:
-            status = DecisionStatus.APPROVED if part_decision.decision == "APPROVED" else DecisionStatus.REJECTED
-            risk_level = RiskLevel(part_decision.risk_level)
-
-            decisions[part_decision.mpn] = AgentDecision(
-                agent_name="SourcingAgent",
-                status=status,
-                reasoning=part_decision.reasoning,
-                output_data={
-                    "selected_mpn": part_decision.mpn,
-                    "selected_supplier": part_decision.selected_supplier,
-                    "selected_supplier_name": part_decision.selected_supplier_name,
-                    "unit_price": part_decision.unit_price,
-                    "lead_time_days": part_decision.lead_time_days,
-                    "risk_level": risk_level.value,
-                },
-                references=[],
-            )
-
-        # Verify all MPNs have decisions
-        missing_mpns = set(mpn_list) - set(decisions.keys())
-        if missing_mpns:
-            raise ValueError(f"SourcingAgent: Missing decisions for MPNs: {missing_mpns}")
-
-        return decisions
+        return specialist_result
 
     def _build_supplier_context(self, supplier) -> str:
         """Build context string for a supplier (included once per unique supplier)."""

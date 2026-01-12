@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from ..stores import ApiKeyStore
+from ..stores import get_api_key_store
 
 router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api-keys", tags=["api-keys"])
 class ApiKeyResponse(BaseModel):
     """API key response (without raw key)."""
     key_id: str
-    client_id: str
+    client_id: Optional[str]
     name: str
     scopes: list[str]
     created_at: str
@@ -32,10 +32,6 @@ class ApiKeyCreateResponse(BaseModel):
     """Response with new API key (including raw key)."""
     key: ApiKeyResponse
     raw_key: str
-
-
-def get_api_key_store() -> ApiKeyStore:
-    return ApiKeyStore()
 
 
 @router.get("", response_model=list[ApiKeyResponse])

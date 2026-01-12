@@ -10,7 +10,7 @@ from .identity import Identity
 from .providers.api_key import ApiKeyProvider
 from .providers.jwt import JWTProvider
 from .providers.x402 import X402Provider
-from ..stores import ApiKeyStore, ClientStore
+from ..stores import get_api_key_store, get_client_store
 
 # Singleton instances
 _auth_chain: Optional[AuthChain] = None
@@ -37,8 +37,8 @@ def get_auth_chain() -> AuthChain:
     global _auth_chain
     if _auth_chain is None:
         config = get_auth_config()
-        api_key_store = ApiKeyStore()
-        client_store = ClientStore()
+        api_key_store = get_api_key_store()
+        client_store = get_client_store()
 
         _auth_chain = AuthChain(config)
 

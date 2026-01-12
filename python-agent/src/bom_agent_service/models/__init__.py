@@ -39,6 +39,13 @@ from .market_intel import (
     MarketIntelReport,
 )
 from .client import Client
+from .specialist_result import SpecialistAgentResult
+from .final_report import (
+    FinalDecisionReport,
+    PartVerdict,
+    ProjectSummary,
+    FollowUpItem,
+)
 
 __all__ = [
     # Enums
@@ -76,4 +83,11 @@ __all__ = [
     # Auth
     "ApiKey",
     "Client",
+    # Specialist agent result
+    "SpecialistAgentResult",
+    # Final decision report
+    "FinalDecisionReport",
+    "PartVerdict",
+    "ProjectSummary",
+    "FollowUpItem",
 ]
